@@ -6,6 +6,8 @@
   --green: #426e54;
   --yb_border: linear-gradient(5deg, #000000 25%, #f2db1a 75%);
   --muted: #656363;
+  --white-shadow: #FAFAFA;
+  --yellow-shadow: #f2dc1abd;
 }
 * {
   padding: 0;
@@ -34,4 +36,114 @@
 body {
   font-size: 12px;
   color: var(--black);
+}
+body header {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+body header img {
+  width: 150px;
+}
+body header .muted {
+  color: var(--muted);
+  margin-left: 20px;
+}
+body .titlebar {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  align-items: flex-start;
+  margin: 8px 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--green);
+  background: var(--white-shadow);
+}
+body .titlebar h1 {
+  font-size: 20px;
+}
+body .titlebar small {
+  color: var(--muted);
+}
+body .grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+body .grid-2 .box {
+  border: 1px solid var(--green);
+  padding: 10px;
+}
+body .grid-2 .box h2 {
+  font-size: 14px;
+  margin: 16px 0 8px;
+}
+body .grid-2 .box .meta tr {
+  border: 1px solid var(--green);
+}
+body .grid-2 .box .meta th,
+body .grid-2 .box .meta td {
+  padding: 6px;
+}
+body .grid-2 .box .meta td {
+  padding: 2px 0;
+  vertical-align: top;
+}
+body .grid-2 .box .meta td:first-child {
+  width: 140px;
+  color: var(--black);
+}
+body .grid-2 .box .meta .right {
+  text-align: right;
+}
+body .items {
+  width: 100%;
+  border-collapse: collapse;
+}
+body .items th,
+body .items td {
+  border: 1px solid var(--green);
+  padding: 6px;
+}
+body .items th {
+  background: var(--white-shadow);
+  text-align: left;
+}
+body .items .num {
+  text-align: right;
+  white-space: nowrap;
+}
+body .items .center {
+  text-align: center;
+}
+body .items .muted {
+  color: var(--white-shadow);
+}
+body .totals {
+  width: 100%;
+}
+body .totals table {
+  width: 100%;
+  margin-top: 10px;
+}
+body .totals table .num {
+  text-align: right;
+  white-space: nowrap;
+}
+body .sign-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 30px;
+  padding-top: 30px;
+}
+body .sign-row .sig-box {
+  border-top: 1px solid var(--green);
+  padding-top: 6px;
+}
+body .sign-row .sig-box .sig-label {
+  font-size: 11px;
+  color: var(--muted);
 }

@@ -130,9 +130,9 @@ def view_draft_detail(request, pk: int):
                 proposal = draft.convert_to_proposal(actor=user)
                 base_url = request.build_absolute_uri("/")
                 # This controls replacing the pdf... (this will keep one version per proposal)
-                # generate_proposal_pdf(proposal, base_url=base_url, force=True, overwrite=True, delete_old=True)
+                generate_proposal_pdf(proposal, base_url=base_url, force=True, overwrite=True, delete_old=True)
                 # This controls versioning the pdf... (this will keep multiple versions per proposal)
-                generate_proposal_pdf(proposal, base_url=base_url, overwrite=False)
+                # generate_proposal_pdf(proposal, base_url=base_url, overwrite=False)
             messages.success(request, "Converted to proposal and generated PDF.")
             return redirect(reverse("proposal_staff:proposal_detail", args=[proposal.id]))
 
@@ -222,7 +222,7 @@ def view_proposal_pdf(request, pk: int):
     if not proposal.pdf:
         messages.info(request, "No PDF has been generated yet.")
         return redirect(reverse("proposal_staff:proposal_detail", args=[proposal.id]))
-
+    print(proposal)
     # Stream the PDF inline
     f = proposal.pdf.open("rb")
     resp = FileResponse(f, content_type="application/pdf")

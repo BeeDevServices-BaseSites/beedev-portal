@@ -4,4 +4,117 @@
 body {
     font-size: 12px;
     color: var(--black);
+
+    header {
+        .flexrow();
+        img {
+            width: 150px;
+        }
+        .muted {
+            color: var(--muted);
+            margin-left: 20px;
+        }
+    }
+    .titlebar {
+        .flexcolumn();
+        align-items: flex-start;
+        margin: 8px 0 14px;
+        padding: 10px 12px;
+        border: 1px solid var(--green);
+        background: var(--white-shadow);
+
+        h1 {
+            font-size: 20px;
+        }
+        small {
+            color: var(--muted);
+        }
+    }
+    .grid-2 {
+        display:grid;
+        grid-template-columns: 1fr 1fr;
+        gap:18px;
+
+        .box {
+            border:1px solid var(--green);
+            padding:10px;
+
+            h2 {
+                font-size:14px;
+                margin:16px 0 8px;
+            }
+            .meta {
+                tr {
+                    border: 1px solid var(--green);
+                }
+                th, td {
+                    padding: 6px;
+                }
+                td {
+                    padding:2px 0;
+                    vertical-align:top;
+                }
+                td:first-child {
+                    width:140px;
+                    color: var(--black);
+                }
+                .right {
+                    text-align:right;
+                }
+            }
+        }
+    }
+    .items {
+        width:100%;
+        border-collapse: collapse;
+
+        th, td {
+            border:1px solid var(--green);
+            padding:6px;
+        }
+        th {
+            background: var(--white-shadow);
+            text-align:left;
+        }
+        .num {
+            text-align:right;
+            white-space:nowrap;
+        }
+        .center {
+            text-align:center;
+        }
+        .muted {
+            color: var(--white-shadow);
+        }
+    }
+    .totals {
+        width:100%;
+
+        table {
+            width:100%;
+            margin-top: 10px;
+
+            .num {
+                text-align:right;
+                white-space:nowrap;
+            }
+        }
+    }
+    .sign-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap:24px;
+        margin-top: 30px;
+        padding-top: 30px;
+
+        .sig-box {
+            border-top:1px solid var(--green);
+            padding-top:6px;
+
+            .sig-label {
+                font-size:11px;
+                color: var(--muted);
+            }
+        }
+    }
 }

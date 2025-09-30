@@ -30,6 +30,19 @@ def generate_proposal_pdf(proposal: Proposal, *, request: Optional[HttpRequest] 
     # Render to bytes
     pdf_bytes = HTML(string=html, base_url=base_url).write_pdf()
 
+    if proposal.pdf:
+        storage = proposal.pdf.storage
+        old_name = proposal.pdf.name
+        try:
+            storage.delete(old_name)
+        except Exception:
+            pass
+        storage.save(old_name, ContentFile(pdf_bytes))
+        if proposal.pdf.name != old_name:
+            proposal.pdf.name = old_name
+            proposal.save(update_fields=["pdf"])
+        return proposal
+
     # Save to FileField; upload_to will place it under the proposals/… path
     filename = f"proposal-{proposal.pk or 'new'}.pdf"
     proposal.pdf.save(filename, ContentFile(pdf_bytes), save=True)
