@@ -67,7 +67,7 @@ def create_new_draft(request):
     user = request.user
     if not _allowed_staff(user):
         raise PermissionDenied("Not allowed")
-    
+
     NoteFormSet = formset_factory(DraftNoteForm, extra=2, can_delete=True)
 
     catalog_qs = (
@@ -82,13 +82,14 @@ def create_new_draft(request):
         notes_fs = NoteFormSet(request.POST, prefix="notes")
 
         if form.is_valid() and notes_fs.is_valid():
-            company = form.cleaned_data["company"]
-            title = form.cleaned_data["title"]
-            currency = form.cleaned_data["currency"]
+            company  = form.cleaned_data["company"]
+            title    = form.cleaned_data["title"].strip()
+            currency = form.cleaned_data["currency"].strip()
             discount = form.cleaned_data.get("discount")
 
-            contact_name = (form.cleaned_data.get("contact_name") or company.primary_contact_name or "").strip()
-            contact_email = (form.cleaned_data.get("contact_email") or company.primary_email or "").strip()
+            # Auto-fill (and normalize) contact if left blank
+            contact_name  = (form.cleaned_data.get("contact_name")  or company.primary_contact_name or "").strip()
+            contact_email = (form.cleaned_data.get("contact_email") or company.primary_email        or "").strip().lower()
 
             with transaction.atomic():
                 draft = ProposalDraft.objects.create(
@@ -101,16 +102,21 @@ def create_new_draft(request):
                     contact_email=contact_email,
                 )
 
+                # Selected catalog items -> DraftItem rows
                 for ci in catalog_qs:
                     if request.POST.get(f"item-{ci.id}-checked") == "on":
                         hours_raw = request.POST.get(f"item-{ci.id}-hours") or ci.default_hours
-                        qty_raw   = request.POST.get(f"item-{ci.id}-qty") or ci.default_quantity
+                        qty_raw   = request.POST.get(f"item-{ci.id}-qty")   or ci.default_quantity
+
+                        # sanitize
                         try:
                             hours = Decimal(str(hours_raw))
+                            if hours < 0: hours = ci.default_hours
                         except Exception:
                             hours = ci.default_hours
                         try:
                             qty = Decimal(str(qty_raw))
+                            if qty < 0: qty = ci.default_quantity
                         except Exception:
                             qty = ci.default_quantity
 
@@ -120,6 +126,7 @@ def create_new_draft(request):
                             hours=hours,
                             quantity=qty,
                         )
+
                 # Notes formset
                 sort = 0
                 for nf in notes_fs:
@@ -136,27 +143,29 @@ def create_new_draft(request):
                         )
                         sort += 1
 
-                # Recalc totals once after all items are saved
+                # Optional: if you removed recalc from DraftItem.save(), keep this.
+                # Otherwise it's safe to omit (avoids double work).
                 draft.recalc_totals(save=True)
 
             messages.success(request, "Draft created.")
-            return redirect(reverse("proposal_staff:view_draft_detail", args=[draft.id]))
+            return redirect(reverse("proposals_staff:view_draft_detail", args=[draft.id]))
 
-
+        # invalid -> re-render
         title = "Create Draft"
-        ctx = {"form": form, "notes_fs": notes_fs, "catalog_items": catalog_qs,}
+        ctx = {"form": form, "notes_fs": notes_fs, "catalog_items": catalog_qs}
         ctx.update(base_ctx(request, title=title))
         ctx["page_heading"] = title
         return render(request, "proposal_staff/create_new_draft.html", ctx)
-    
+
     # GET
     form = NewDraftForm()
     notes_fs = NoteFormSet(prefix="notes")
     title = "Create Draft"
-    ctx = {"form": form, "notes_fs": notes_fs, "catalog_items": catalog_qs,}
+    ctx = {"form": form, "notes_fs": notes_fs, "catalog_items": catalog_qs}
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title
     return render(request, "proposal_staff/create_new_draft.html", ctx)
+
 
 @login_required
 def view_draft_detail(request, pk: int):

@@ -3,115 +3,182 @@
 {% load page_title %}
 
 {% block content %}
-  <head>
-    <link rel="stylesheet" href="{% static 'css/proposal.css'%}?v={% now 'U' %}">
-  </head>
-  <h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
+<head>
+  <link rel="stylesheet" href="{% static 'css/proposal.css'%}?v={% now 'U' %}">
+</head>
 
-  <form method="post">
-    {% csrf_token %}
+<h1 class="title">
+  {{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}
+</h1>
 
-    <fieldset class="box">
-        <legend>Draft Header</legend>
-        <div class="grid">
-            <div>
-                <label>Company</label>
-                {{ form.company }}
-            </div>
-            <div>
-                <label>Title</label>
-                {{ form.title }}
-            </div>
-            <div>
-                <label>Currency</label>
-                {{ form.currency }}
-            </div>
-            <div>
-                <label>Discount</label>
-                {{ form.discount }}
-            </div>
-        </div>
+<form method="post" novalidate>
+  {% csrf_token %}
 
-        <div class="grid" style="margin-top: 1rem;">
-        <div>
-            <label>Primary contact name</label>
-            {{ form.contact_name }}
-        </div>
-        <div>
-            <label>Primary contact email</label>
-            {{ form.contact_email }}
-        </div>
-        </div>
-    </fieldset>
-
-    <fieldset class="box" style="margin-top: 1rem;">
-        <legend>Catalog Items</legend>
-
-        <table class="entry">
-        <thead>
-            <tr>
-                <th></th>
-                <th>Item</th>
-                <th>Hours</th>
-                <th>Qty</th>
-                <th>Line Total</th>
-            </tr>
-        </thead>
-        <tbody id="catalog-rows">
-            {% for ci in catalog_items %}
-            {% with hourly=ci.job_rate.hourly_rate base=ci.base_setting.base_rate %}
-            <tr class="catalog-row" data-hourly="{{ hourly }}" data-base="{{ base }}">
-                <td>
-                    <input type="checkbox" class="js-select" name="item-{{ ci.id }}-checked">
-                </td>
-                <td>{{ ci.name }}</td>
-                <td>
-                    <input type="number" class="js-hours" name="items-{{ ci.id }}-hours" step="0.25" min="0" value="{{ ci.default_hours }}">
-                </td>
-                <td>
-                    <input type="number" class="js-qty" name="items-{{ ci.id }}-qty" step="1" min="0" value="{{ ci.default_quantity }}">
-                </td>
-                <td class="line-total" style="text-align:right;">—</td>
-            </tr>
-            {% endwith %}
-            {% empty %}
-            <tr><td colspan="7">No catalog items yet.</td></tr>
-            {% endfor %}
-        </tbody>
-        </table>
-          <div style="text-align:right;margin-top:.5rem;">
-    <strong>Estimated total:</strong>
-    <span id="draft-grand-total">$0.00</span>
-  </div>
-    </fieldset>
-
-    <fieldset class="box" style="margin-top: 1rem;">
-        <legend>Notes (Markdown)</legend>
-
-        {{ notes_fs.management_form }}
-        {% for nf in notes_fs %}
-        <div class="note-block" style="border:1px solid #eee;padding:10px;margin-bottom:10px;">
-            <div>
-            <label>Section title</label>
-            {{ nf.subject }}
-            </div>
-            <div>
-            <label>Details (Markdown)</label><br>
-            {{ nf.body_md }}
-            </div>
-            {% if notes_fs.can_delete %}
-            <label style="display:inline-flex;align-items:center;gap:.5rem;margin-top:.5rem;">
-                {{ nf.DELETE }} Remove this section
-            </label>
-            {% endif %}
-        </div>
-        {% endfor %}
-        <p class="help">You can add bullet points here (e.g., “Project Overview”, “Core Pages”, “Services”).</p>
-    </fieldset>
-
-    <div style="margin-top: 1rem;">
-        <button type="submit" class="btn">Create Draft</button>
+  {# ---------- non-field errors ---------- #}
+  {% if form.non_field_errors %}
+    <div class="form-errors">
+      {% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}
     </div>
-    </form>
-    <script src='{% static "js/draft.js"%}' defer></script>
+  {% endif %}
+
+  <fieldset class="box">
+    <legend>Draft Header</legend>
+
+    <div class="grid">
+      <div class="formHeader">
+        <label for="{{ form.company.id_for_label }}">Company <span class="required">*</span></label>
+        {{ form.company }}
+        {% if form.company.errors %}<div class="field-errors">{% for e in form.company.errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
+      </div>
+
+      <div class="formHeader">
+        <label for="{{ form.title.id_for_label }}">Title <span class="required">*</span></label>
+        {{ form.title }}
+        {% if form.title.errors %}<div class="field-errors">{% for e in form.title.errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
+      </div>
+
+      <div class="formHeader">
+        <label for="{{ form.currency.id_for_label }}">Currency</label>
+        {{ form.currency }}
+        {% if form.currency.errors %}<div class="field-errors">{% for e in form.currency.errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
+      </div>
+
+      <div class="formHeader">
+        <label for="{{ form.discount.id_for_label }}">Discount</label>
+        {{ form.discount }}
+        {% if form.discount.errors %}<div class="field-errors">{% for e in form.discount.errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="formHeader">
+        <label for="{{ form.contact_name.id_for_label }}">Primary contact name</label>
+        {{ form.contact_name }}
+        {% if form.contact_name.errors %}<div class="field-errors">{% for e in form.contact_name.errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
+      </div>
+
+      <div class="formHeader">
+        <label for="{{ form.contact_email.id_for_label }}">Primary contact email</label>
+        {{ form.contact_email }}
+        {% if form.contact_email.errors %}<div class="field-errors">{% for e in form.contact_email.errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
+      </div>
+    </div>
+
+    {# Hidden endpoint for AJAX primary contact lookup; JS will replace trailing /0/ with company id #}
+    {% url 'company_staff:ajax_primary_contact' 0 as primary_url %}
+    <input type="hidden" id="company-ajax-endpoint" value="{{ primary_url }}">
+  </fieldset>
+
+  <fieldset class="box">
+    <legend>Catalog Items</legend>
+
+    <table class="entry">
+      <thead>
+        <tr>
+          <th style="width:2rem;"></th>
+          <th>Item</th>
+          <th>Hours</th>
+          <th>Qty</th>
+          <th style="text-align:right;">Line Total</th>
+        </tr>
+      </thead>
+      <tbody id="catalog-rows">
+        {% for ci in catalog_items %}
+          {% with hourly=ci.job_rate.hourly_rate base=ci.base_setting.base_rate %}
+          <tr class="catalog-row" data-hourly="{{ hourly }}" data-base="{{ base }}">
+            <td>
+              <input type="checkbox" class="js-select" name="item-{{ ci.id }}-checked">
+            </td>
+            <td>
+              <div><strong>{{ ci.name }}</strong></div>
+              {% if ci.description %}<div class="muted" style="font-size:.9em;">{{ ci.description }}</div>{% endif %}
+            </td>
+            <td>
+              <input type="number" class="js-hours" name="items-{{ ci.id }}-hours"
+                     step="0.25" min="0" value="{{ ci.default_hours }}">
+            </td>
+            <td>
+              <input type="number" class="js-qty" name="items-{{ ci.id }}-qty"
+                     step="1" min="0" value="{{ ci.default_quantity }}">
+            </td>
+            <td class="line-total" style="text-align:right;">—</td>
+          </tr>
+          {% endwith %}
+        {% empty %}
+          <tr><td colspan="5">No catalog items yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div style="text-align:right;margin-top:.5rem;">
+      <strong>Estimated total:</strong>
+      <span id="draft-grand-total">$0.00</span>
+    </div>
+  </fieldset>
+
+  <fieldset class="box" style="margin-top:1rem;">
+    <legend>Notes (Markdown)</legend>
+
+    {{ notes_fs.management_form }}
+
+    <div id="notes-container">
+      {% for nf in notes_fs %}
+      <div class="note-block" data-note-index="{{ forloop.counter0 }}" style="border:1px solid #eee;padding:10px;margin-bottom:10px;">
+        {% if nf.non_field_errors %}
+          <div class="field-errors">{% for e in nf.non_field_errors %}<p>{{ e }}</p>{% endfor %}</div>
+        {% endif %}
+
+        <div>
+          <label>Section title</label>
+          {{ nf.subject }}
+          {% if nf.subject.errors %}<div class="field-errors">{% for e in nf.subject.errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
+        </div>
+        <div>
+          <label>Details (Markdown)</label><br>
+          {{ nf.body_md }}
+          {% if nf.body_md.errors %}<div class="field-errors">{% for e in nf.body_md.errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
+        </div>
+
+        {% if notes_fs.can_delete %}
+          <label style="display:inline-flex;gap:.5rem;align-items:center;margin-top:.5rem;">
+            {{ nf.DELETE }} Remove this section
+          </label>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <button type="button" id="add-note-btn" class="btn" style="margin-top:.5rem;">+ Add note section</button>
+
+    {# A hidden template for new note blocks; __prefix__ will be replaced in JS #}
+    <template id="note-empty-template">
+      <div class="note-block" style="border:1px solid #eee;padding:10px;margin-bottom:10px;">
+        <div>
+          <label>Section title</label>
+          {{ notes_fs.empty_form.subject }}
+        </div>
+        <div>
+          <label>Details (Markdown)</label><br>
+          {{ notes_fs.empty_form.body_md }}
+        </div>
+        {% if notes_fs.can_delete %}
+          <label style="display:inline-flex;gap:.5rem;align-items:center;margin-top:.5rem;">
+            {{ notes_fs.empty_form.DELETE }} Remove this section
+          </label>
+        {% endif %}
+      </div>
+    </template>
+
+    <p class="help">You can add bullet points here (e.g., “Project Overview”, “Core Pages”, “Services”).</p>
+  </fieldset>
+
+  <div style="margin-top:1rem;">
+    <button type="submit" class="btn">Create Draft</button>
+  </div>
+</form>
+
+{# --- JS: totals (your existing file) --- #}
+<script src="{% static 'js/draft.js' %}" defer></script>
+<script src="{% static 'js/draft-form.js' %}" defer></script>
+
 {% endblock content %}

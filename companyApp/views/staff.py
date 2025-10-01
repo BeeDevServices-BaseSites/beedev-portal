@@ -10,6 +10,17 @@ from core.utils.context import base_ctx
 from django.core.paginator import Paginator
 from django.db.models import Prefetch, Count, Sum, Q
 from django.contrib import messages
+from django.http import JsonResponse, Http404
+
+def ajax_primary_contact(request, pk: int):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        raise Http404()
+    c = get_object_or_404(Company, pk=pk)
+    return JsonResponse({
+        "name":  (c.primary_contact_name or "").strip(),
+        "email": (c.primary_email or "").strip().lower(),
+    })
+
 
 @login_required
 def company_home(request):

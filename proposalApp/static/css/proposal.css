@@ -5,6 +5,11 @@
   --white: #F5F5F5;
   --green: #426e54;
   --yb_border: linear-gradient(5deg, #000000 25%, #f2db1a 75%);
+  --muted: #656363;
+  --white-shadow: #FAFAFA;
+  --altmuted: #908d8d;
+  --yellow-shadow: #f2dc1abd;
+  --red: #B91C1C;
 }
 * {
   padding: 0;
@@ -106,4 +111,36 @@ body main .detail .alt_entry {
 body main .detail .alt_entry th {
   background-color: var(--green);
   color: var(--white);
+}
+body main form .box {
+  margin-top: 1rem;
+}
+body main form .box legend {
+  font-size: 1.1em;
+  padding-inline: 2px;
+}
+body main form .box .grid {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  align-items: flex-start;
+  margin: 0.5em 0 0.5em 1em;
+}
+body main form .box .grid .formHeader {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  justify-content: flex-start;
+}
+body main form .box .grid .formHeader label {
+  width: 200px;
+}
+body main form .box .grid .formHeader label .required {
+  color: var(--red);
+}
+body main form .box .entry {
+  width: 95%;
 }

@@ -1,30 +1,70 @@
 # proposalApp/forms.py
-from decimal import Decimal
 from django import forms
+from django.forms import formset_factory, inlineformset_factory
 from companyApp.models import Company
-from .models import Discount
+from .models import ProposalDraft, Discount, DraftNote
 
-class NewDraftForm(forms.Form):
-    company = forms.ModelChoiceField(
-        queryset=Company.objects.all(),
-        label="Company"
-    )
-    title = forms.CharField(max_length=200, label="Draft title")
-    currency = forms.CharField(max_length=8, initial="USD", label="Currency")
-    discount = forms.ModelChoiceField(
-        queryset=Discount.objects.filter(is_active=True),
-        required=False,
-        label="Discount"
-    )
-    contact_name = forms.CharField(max_length=160, required=False, label="Primary contact name")
-    contact_email = forms.EmailField(required=False, label="Primary contact email")
+# -------------------------
+# Draft header form (create & edit)
+# -------------------------
+class DraftForm(forms.ModelForm):
+    class Meta:
+        model = ProposalDraft
+        fields = [
+            "company", "title", "currency", "discount",
+            "contact_name", "contact_email",
+        ]
+        labels = {
+            "company": "Company",
+            "title": "Draft title",
+            "currency": "Currency",
+            "discount": "Discount",
+            "contact_name": "Primary contact name",
+            "contact_email": "Primary contact email",
+        }
+        widgets = {
+            "company": forms.Select(attrs={"required": "required", "id": "id_company"}),
+            "title": forms.TextInput(attrs={"required": "required"}),
+            "currency": forms.TextInput(attrs={"maxlength": 8}),
+            "discount": forms.Select(),
+            "contact_name": forms.TextInput(attrs={"id": "id_contact_name"}),
+            "contact_email": forms.EmailInput(attrs={"id": "id_contact_email"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["discount"].queryset = Discount.objects.filter(is_active=True)
+        self.fields["discount"].required = False
+        if not self.instance.pk:
+            self.fields["currency"].initial = "USD"  # default when creating
 
     def clean(self):
         cleaned = super().clean()
-        # If employee leaves contact fields blank, we’ll fill from company in the view.
+        company = cleaned.get("company")
+        title = (cleaned.get("title") or "").strip()
+
+        # Gates
+        if not company:
+            self.add_error("company", "Select a company.")
+        if not title:
+            self.add_error("title", "Enter a title.")
+
+        # Auto-fill contact from company if left blank (works for create & edit)
+        if company:
+            if not cleaned.get("contact_name"):
+                cleaned["contact_name"] = company.primary_contact_name or ""
+            if not cleaned.get("contact_email"):
+                cleaned["contact_email"] = (company.primary_email or "").strip().lower()
+
         return cleaned
 
+# Backward compatibility with your existing import/name
+NewDraftForm = DraftForm
 
+
+# --------------------------------
+# Notes (create flow: plain FormSet)
+# --------------------------------
 class DraftNoteForm(forms.Form):
     subject = forms.CharField(max_length=160, required=False, label="Section title")
     body_md = forms.CharField(
@@ -32,3 +72,25 @@ class DraftNoteForm(forms.Form):
         label="Details (Markdown)",
         widget=forms.Textarea(attrs={"rows": 4})
     )
+    sort_order = forms.IntegerField(required=False, min_value=0, initial=0, label="Sort order")
+
+DraftNoteFormSet = formset_factory(
+    DraftNoteForm,
+    extra=1,          # starts with one; your JS “Add section” appends more using empty_form
+    can_delete=True,
+)
+
+
+# -------------------------------------------
+# Notes (edit flow: inline ModelFormSet)
+# -------------------------------------------
+DraftNoteInlineFormSet = inlineformset_factory(
+    parent_model=ProposalDraft,
+    model=DraftNote,
+    fields=["subject", "body_md", "sort_order"],
+    extra=0,          # load exactly what exists; JS can append from empty_form
+    can_delete=True,
+    widgets={
+        "body_md": forms.Textarea(attrs={"rows": 4}),
+    },
+)
