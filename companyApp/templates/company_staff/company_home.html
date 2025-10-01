@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load i18n static %}
-{% load page_title %}
+{% load page_title user_extras %}
 
 {% block content %}
 <head>
@@ -12,7 +12,7 @@
     <h2><a href="{% url 'company_staff:add_company' %}" class="icon_link"><img src="{% static 'images/hex_plus.png' %}" alt="icon" class="icon"><span>Add New Company</span></a></h2>
 </div>
 <div class="detail">
-    <h3>Propsects</h3>
+    <h3>Prospects</h3>
     <table class="entry alt_entry">
         <tr>
             <th>Company Name</th>
@@ -21,7 +21,7 @@
         </tr>
         {% for p in prospects %}
             <tr>
-                <td><a href="#">{{p.company_name}}</a></td>
+                <td><a href="{% url 'prospects:view_one_prospect' p.pk %}">{{p.company_name}}</a></td>
                 <td>{{p.status}}</td>
                 <td>{{p.last_contacted_at}}</td>
             </tr>

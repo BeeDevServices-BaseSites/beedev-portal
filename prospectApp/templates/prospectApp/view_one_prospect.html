@@ -1,17 +1,45 @@
 {% extends "base.html" %}
 {% load i18n static %}
-{% load page_title %}
+{% load page_title user_extras %}
 
 {% block content %}
     <head>
         <link rel="stylesheet" href="{% static 'css/prospect.css'%}?v={% now 'U' %}">
     </head>
     <h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
+    <div class="mini_menu">
+        <h2><a href="{% url 'userApp:employee_home' %}">Dashboard</a></h2>
+        <h2><a href="{% url 'userApp:view_all_clients' %}">Client Admin</a></h2>
+    </div>
+    <div class="mini_menu">
+        <h2><a href="{% url 'prospects:prospect_edit' prospect.pk %}">Update Prospect Info</a></h2>
+        <h2><a href="{% url 'prospects:prospect_status' prospect.pk %}">Update Status</a></h2>
+    </div>
 
-    {{prospect.full_name}}
-    {{prospect.company_name}}
-    {{prospect.email}}
-    {{prospect.status}}
-    {{prospect.created_by}}
+    <div class="info">
+        <h3>Details</h3>
+        <table class="entry">
+            <tr>
+                <th>Full Name:</th>
+                <td>{{prospect.full_name}}</td>
+            </tr>
+            <tr>
+                <th>Company Name:</th>
+                <td>{{prospect.company_name}}</td>
+            </tr>
+            <tr>
+                <th>Contact Email:</th>
+                <td>{{prospect.email}}</td>
+            </tr>
+            <tr>
+                <th>Status:</th>
+                <td>{{prospect.status}}</td>
+            </tr>
+            <tr>
+                <th>Created By</th>
+                <td>{{ prospect.created_by|user_name|default:"—" }}</td>
+            </tr>
+        </table>
+    </div>
 
 {% endblock content %}

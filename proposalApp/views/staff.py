@@ -148,7 +148,7 @@ def create_new_draft(request):
                 draft.recalc_totals(save=True)
 
             messages.success(request, "Draft created.")
-            return redirect(reverse("proposals_staff:view_draft_detail", args=[draft.id]))
+            return redirect(reverse("proposal_staff:draft_detail", args=[draft.id]))
 
         # invalid -> re-render
         title = "Create Draft"

@@ -11,6 +11,8 @@ app_name = "prospects"
 urlpatterns = [
     path('new', views.add_prospect, name="add_prospect"),
     path('<int:pk>', views.view_prospect, name="view_one_prospect"),
+    path("<int:pk>/edit/", views.edit_prospect, name="prospect_edit"),
+    path("<int:pk>/status/", views.update_prospect_status, name="prospect_status"),
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -14,6 +14,8 @@
 | /employee | Dashboard | userApp | Created |
 | /employee/profile | Profile | userApp | Done |
 | /staff | Admin | userApp | Done |
+| /team | Staff Admin | userApp | Created |
+| /team/# | Staff Profile | userApp | Created |
 | /clients | Client Admin |userApp | Created |
 | /clients/# | One Client Profile | userApp | -- |
 | /proposals | Proposal Admin | proposalApp | Created |
@@ -23,7 +25,7 @@
 | /proposals/proposal/# | One Proposal | proposalApp | Created |
 | /companies | Company Admin | companyApp | Created |
 | /companies/company/# | One Company | companyApp | Created |
-| /companies/company/new | Create Company | companyApp | Created |
+| /companies/company/add | Create Company | companyApp | Created |
 | /invoices | Invoice Admin | invoiceApp | Created |
 | /invoices/# | One Invoice | invoiceApp | --|
 | /invoices/new | Create Invoice | invoiceApp | --|
@@ -36,6 +38,8 @@
 | /tickets/archived/# | One Archived Ticket | ticketApp | -- |
 | /prospects/# | One Prospect | prospectApp | Created |
 | /prospects/new | Create Prospect | prospectApp | Created |
+| /prospects/#/edit | Edit Prospect Detail | prospectApp | Created |
+| /prospects/#/status | Updated Prospect Status | prospectApp | Created |
 |||||
 
 

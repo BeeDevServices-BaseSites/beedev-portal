@@ -3,6 +3,16 @@ from django.conf import settings
 from django.core.validators import URLValidator
 from django.utils import timezone
 import secrets
+from django.db import transaction
+from companyApp.models import Company, CompanyContact
+
+def _coalesce(*vals):
+    for v in vals:
+        if v:
+            v = str(v).strip()
+            if v:
+                return v
+    return ""
 
 class TimeStamped(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
@@ -62,3 +72,71 @@ class Prospect(TimeStamped):
     def __str__(self):
         base = self.company_name or self.full_name or self.email
         return f"{base} ({self.email})"
+
+    @transaction.atomic
+    def convert_to_company(self, *, actor=None, update_if_exists=True):
+        """
+        Create (or update) a Company from this Prospect.
+        - Copies primary contact name/email into Company.
+        - Creates a CompanyContact (primary) if an email exists.
+        Returns the Company.
+        """
+
+        # Company name (fall back across common prospect fields)
+        company_name = _coalesce(
+            getattr(self, "company_name", None),
+            getattr(self, "name", None),             # some prospects use 'name'
+        ) or "Unnamed Company"
+
+        # Contact name
+        contact_name = _coalesce(
+            getattr(self, "primary_contact_name", None),
+            getattr(self, "contact_name", None),
+            getattr(self, "full_name", None),
+            f"{getattr(self, 'first_name', '')} {getattr(self, 'last_name', '')}",
+        )
+
+        # Contact email (lowercased)
+        contact_email = _coalesce(
+            getattr(self, "primary_email", None),
+            getattr(self, "contact_email", None),
+            getattr(self, "email", None),
+        ).lower()
+
+        company, created = Company.objects.get_or_create(
+            name=company_name,
+            defaults={
+                "primary_contact_name": contact_name,
+                "primary_email": contact_email,
+                # Optional extras if you have them on Prospect:
+                "phone": getattr(self, "phone", "") or "",
+                "website": getattr(self, "website", "") or "",
+            },
+        )
+
+        # If company already existed, optionally fill empty fields
+        if not created and update_if_exists:
+            fields_to_update = []
+            if contact_name and not company.primary_contact_name:
+                company.primary_contact_name = contact_name
+                fields_to_update.append("primary_contact_name")
+            if contact_email and not company.primary_email:
+                company.primary_email = contact_email
+                fields_to_update.append("primary_email")
+            if fields_to_update:
+                company.save(update_fields=fields_to_update)
+
+        # Create a primary CompanyContact only if we have an email (to avoid duplicate blank emails)
+        if contact_email:
+            CompanyContact.objects.get_or_create(
+                company=company,
+                email=contact_email,
+                defaults={
+                    "name": contact_name or "",
+                    "title": getattr(self, "title", "") or "",
+                    "phone": getattr(self, "phone", "") or "",
+                    "is_primary": True,
+                },
+            )
+
+        return company

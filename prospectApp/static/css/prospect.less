@@ -2,6 +2,21 @@
 
 body {
     main {
+        .mini_menu {
+            .flexrow();
+            justify-content: space-evenly;
+            width: 100%;
+            margin-bottom: 1em;
+
+            a {
+                color: var(--black);
+                text-decoration: none;
+            }
+            a:hover {
+                color: var(--green);
+                text-decoration: underline;
+            }
+        }
         form {
             .flexcolumn();
             width: 50%;
@@ -28,6 +43,35 @@ body {
                     color: var(--yellow);
                     font-size: 1.1rem;
                     text-decoration: none;
+                }
+            }
+        }
+        .info {
+            .flexcolumn();
+            align-items: flex-start;
+            margin: 0 0 1em 0;
+            width: 50%;
+
+            h3 {
+                text-align: center;
+                background-color: var(--green);
+                color: var(--white);
+                width: 100%;
+                padding: 1em;
+                margin-bottom: .5em;
+            }
+            .entry {
+                width: 100%;
+
+                th {
+                    background-color: var(--background);
+                    color: var(--black);
+                    font-size: 1.2em;
+                }
+                th, td {
+                    width: 50%;
+                    text-align: left;
+                    padding-left: .5em;
                 }
             }
         }

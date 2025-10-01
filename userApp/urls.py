@@ -17,11 +17,11 @@ urlpatterns = [
 
     # || Staff/Employee Links ||
     path("staff/", staff_home, name="staff_home"), # redirects to admin
-    path("team/", view_all_staff, name="view_all_staff"),
-    path("clients/", view_all_clients, name="view_all_clients"),
-    path("staff/<int:pk>/", view_staff_profile, name="profile_detail"),
     path("employee/", employee_home, name="employee_home"),
     path("employee/profile/", view_employee_profile, name="view_employee_profile"),
+    path("team/", view_all_staff, name="view_all_staff"),
+    path("team/<int:pk>/", view_staff_profile, name="profile_detail"),
+    path("clients/", view_all_clients, name="view_all_clients"),
 
     # || Client Links ||
     path("client/", client_home, name="client_home"),
