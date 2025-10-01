@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% load page_title %}
+
+{% block content %}
+  <head>
+    <link rel="stylesheet" href="{% static 'css/proposal.css'%}?v={% now 'U' %}">
+  </head>
+  <h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
+
+  <form method="post">
+    {% csrf_token %}
+
+    <fieldset class="box">
+        <legend>Draft Header</legend>
+        <div class="grid">
+            <div>
+                <label>Company</label>
+                {{ form.company }}
+            </div>
+            <div>
+                <label>Title</label>
+                {{ form.title }}
+            </div>
+            <div>
+                <label>Currency</label>
+                {{ form.currency }}
+            </div>
+            <div>
+                <label>Discount</label>
+                {{ form.discount }}
+            </div>
+        </div>
+
+        <div class="grid" style="margin-top: 1rem;">
+        <div>
+            <label>Primary contact name</label>
+            {{ form.contact_name }}
+        </div>
+        <div>
+            <label>Primary contact email</label>
+            {{ form.contact_email }}
+        </div>
+        </div>
+    </fieldset>
+
+    <fieldset class="box" style="margin-top: 1rem;">
+        <legend>Catalog Items</legend>
+
+        <table class="entry">
+        <thead>
+            <tr>
+                <th></th>
+                <th>Item</th>
+                <th>Hours</th>
+                <th>Qty</th>
+                <th>Line Total</th>
+            </tr>
+        </thead>
+        <tbody id="catalog-rows">
+            {% for ci in catalog_items %}
+            {% with hourly=ci.job_rate.hourly_rate base=ci.base_setting.base_rate %}
+            <tr class="catalog-row" data-hourly="{{ hourly }}" data-base="{{ base }}">
+                <td>
+                    <input type="checkbox" class="js-select" name="item-{{ ci.id }}-checked">
+                </td>
+                <td>{{ ci.name }}</td>
+                <td>
+                    <input type="number" class="js-hours" name="items-{{ ci.id }}-hours" step="0.25" min="0" value="{{ ci.default_hours }}">
+                </td>
+                <td>
+                    <input type="number" class="js-qty" name="items-{{ ci.id }}-qty" step="1" min="0" value="{{ ci.default_quantity }}">
+                </td>
+                <td class="line-total" style="text-align:right;">—</td>
+            </tr>
+            {% endwith %}
+            {% empty %}
+            <tr><td colspan="7">No catalog items yet.</td></tr>
+            {% endfor %}
+        </tbody>
+        </table>
+          <div style="text-align:right;margin-top:.5rem;">
+    <strong>Estimated total:</strong>
+    <span id="draft-grand-total">$0.00</span>
+  </div>
+    </fieldset>
+
+    <fieldset class="box" style="margin-top: 1rem;">
+        <legend>Notes (Markdown)</legend>
+
+        {{ notes_fs.management_form }}
+        {% for nf in notes_fs %}
+        <div class="note-block" style="border:1px solid #eee;padding:10px;margin-bottom:10px;">
+            <div>
+            <label>Section title</label>
+            {{ nf.subject }}
+            </div>
+            <div>
+            <label>Details (Markdown)</label><br>
+            {{ nf.body_md }}
+            </div>
+            {% if notes_fs.can_delete %}
+            <label style="display:inline-flex;align-items:center;gap:.5rem;margin-top:.5rem;">
+                {{ nf.DELETE }} Remove this section
+            </label>
+            {% endif %}
+        </div>
+        {% endfor %}
+        <p class="help">You can add bullet points here (e.g., “Project Overview”, “Core Pages”, “Services”).</p>
+    </fieldset>
+
+    <div style="margin-top: 1rem;">
+        <button type="submit" class="btn">Create Draft</button>
+    </div>
+    </form>
+    <script src='{% static "js/draft.js"%}' defer></script>
+{% endblock content %}

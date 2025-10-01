@@ -4,13 +4,17 @@ from django.db.models import Prefetch, Max
 from django.views.generic import TemplateView
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db import transaction
-from ..models import ProposalDraft, DraftItem, Proposal, ProposalLineItem, ProposalAppliedDiscount, ProposalRecipient, ProposalEvent
+from ..models import ProposalDraft, DraftItem, DraftNote, Proposal, ProposalLineItem, ProposalAppliedDiscount, ProposalRecipient, ProposalEvent, CatalogItem
 from userApp.models import User
+from companyApp.models import Company
 from core.utils.context import base_ctx
 from django.contrib import messages
 from django.urls import reverse
 from proposalApp.pdf import generate_proposal_pdf
 from django.http import FileResponse, HttpResponseNotAllowed
+from decimal import Decimal
+from django.forms import formset_factory
+from ..forms import NewDraftForm, DraftNoteForm
 
 def _is_owner(user):
     return user.is_active and (user.is_superuser or user.role == User.Roles.OWNER)
@@ -57,6 +61,102 @@ def proposal_home(request):
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title
     return render(request, "proposal_staff/proposal_home.html", ctx)
+
+@login_required
+def create_new_draft(request):
+    user = request.user
+    if not _allowed_staff(user):
+        raise PermissionDenied("Not allowed")
+    
+    NoteFormSet = formset_factory(DraftNoteForm, extra=2, can_delete=True)
+
+    catalog_qs = (
+        CatalogItem.objects
+        .select_related("job_rate", "base_setting")
+        .filter(is_active=True)
+        .order_by("sort_order", "name")
+    )
+
+    if request.method == "POST":
+        form = NewDraftForm(request.POST)
+        notes_fs = NoteFormSet(request.POST, prefix="notes")
+
+        if form.is_valid() and notes_fs.is_valid():
+            company = form.cleaned_data["company"]
+            title = form.cleaned_data["title"]
+            currency = form.cleaned_data["currency"]
+            discount = form.cleaned_data.get("discount")
+
+            contact_name = (form.cleaned_data.get("contact_name") or company.primary_contact_name or "").strip()
+            contact_email = (form.cleaned_data.get("contact_email") or company.primary_email or "").strip()
+
+            with transaction.atomic():
+                draft = ProposalDraft.objects.create(
+                    company=company,
+                    created_by=user,
+                    title=title,
+                    currency=currency,
+                    discount=discount,
+                    contact_name=contact_name,
+                    contact_email=contact_email,
+                )
+
+                for ci in catalog_qs:
+                    if request.POST.get(f"item-{ci.id}-checked") == "on":
+                        hours_raw = request.POST.get(f"item-{ci.id}-hours") or ci.default_hours
+                        qty_raw   = request.POST.get(f"item-{ci.id}-qty") or ci.default_quantity
+                        try:
+                            hours = Decimal(str(hours_raw))
+                        except Exception:
+                            hours = ci.default_hours
+                        try:
+                            qty = Decimal(str(qty_raw))
+                        except Exception:
+                            qty = ci.default_quantity
+
+                        DraftItem.objects.create(
+                            draft=draft,
+                            catalog_item=ci,
+                            hours=hours,
+                            quantity=qty,
+                        )
+                # Notes formset
+                sort = 0
+                for nf in notes_fs:
+                    if notes_fs.can_delete and nf.cleaned_data.get("DELETE"):
+                        continue
+                    subj = (nf.cleaned_data.get("subject") or "").strip()
+                    body = (nf.cleaned_data.get("body_md") or "").strip()
+                    if subj or body:
+                        DraftNote.objects.create(
+                            draft=draft,
+                            sort_order=sort,
+                            subject=subj or "Notes",
+                            body_md=body,
+                        )
+                        sort += 1
+
+                # Recalc totals once after all items are saved
+                draft.recalc_totals(save=True)
+
+            messages.success(request, "Draft created.")
+            return redirect(reverse("proposal_staff:view_draft_detail", args=[draft.id]))
+
+
+        title = "Create Draft"
+        ctx = {"form": form, "notes_fs": notes_fs, "catalog_items": catalog_qs,}
+        ctx.update(base_ctx(request, title=title))
+        ctx["page_heading"] = title
+        return render(request, "proposal_staff/create_new_draft.html", ctx)
+    
+    # GET
+    form = NewDraftForm()
+    notes_fs = NoteFormSet(prefix="notes")
+    title = "Create Draft"
+    ctx = {"form": form, "notes_fs": notes_fs, "catalog_items": catalog_qs,}
+    ctx.update(base_ctx(request, title=title))
+    ctx["page_heading"] = title
+    return render(request, "proposal_staff/create_new_draft.html", ctx)
 
 @login_required
 def view_draft_detail(request, pk: int):

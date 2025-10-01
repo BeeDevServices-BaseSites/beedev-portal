@@ -13,6 +13,7 @@ from .models import (
     CatalogItem,
     ProposalDraft,
     DraftItem,
+    DraftNote,
     Proposal,
     ProposalLineItem,
     ProposalAppliedDiscount,
@@ -20,6 +21,7 @@ from .models import (
     ProposalEvent,
     CostTier,
     ProposalViewer,
+    ProposalSection,
 )
 
 # -------- permission helpers --------
@@ -136,10 +138,15 @@ class DraftItemInline(admin.TabularInline):
     readonly_fields = ("name", "description", "job_rate", "base_setting", "line_total")
     autocomplete_fields = ("catalog_item",)
 
+class DraftNoteInline(admin.TabularInline):
+    model = DraftNote
+    extra = 0
+    fields = ("sort_order", "subject", "body_md")
+    ordering = ("sort_order", "id")
 
 @admin.register(ProposalDraft)
 class ProposalDraftAdmin(admin.ModelAdmin):
-    inlines = [DraftItemInline]
+    inlines = [DraftItemInline, DraftNoteInline]
 
     list_display = (
         "title", "company", "currency",
@@ -287,7 +294,6 @@ class ProposalRecipientInline(admin.TabularInline):
     extra = 0
     fields = ("is_primary", "name", "email", "delivered_at", "last_opened_at")
 
-
 class ProposalEventInline(admin.TabularInline):
     model = ProposalEvent
     extra = 0
@@ -295,7 +301,6 @@ class ProposalEventInline(admin.TabularInline):
     readonly_fields = ("kind", "at", "actor", "ip_address", "data")
     fields = ("kind", "at", "actor", "ip_address", "data")
     show_change_link = False
-
 
 class ProposalLineItemInline(admin.TabularInline):
     model = ProposalLineItem
@@ -307,13 +312,11 @@ class ProposalLineItemInline(admin.TabularInline):
         "line_total", "unit_price", "subtotal",
     )
 
-
 class ProposalAppliedDiscountInline(admin.TabularInline):
     model = ProposalAppliedDiscount
     extra = 0
     fields = ("discount_code", "name", "kind", "value", "amount_applied", "sort_order")
     can_delete = False
-
 
 class ProposalViewerInline(admin.TabularInline):
     model = ProposalViewer
@@ -331,6 +334,11 @@ class ProposalViewerInline(admin.TabularInline):
                 field.queryset = field.queryset.filter(pk__in=member_user_ids)
         return field
 
+class ProposalSectionInline(admin.TabularInline):
+    model = ProposalSection
+    extra = 0
+    fields = ("sort_order", "subject", "body_md", "is_client_visible")
+    ordering = ("sort_order", "id")
 
 @admin.register(Proposal)
 class ProposalAdmin(admin.ModelAdmin):
@@ -340,6 +348,7 @@ class ProposalAdmin(admin.ModelAdmin):
         ProposalLineItemInline,
         ProposalAppliedDiscountInline,
         ProposalViewerInline,
+        ProposalSectionInline,
     ]
 
     list_display = (
@@ -366,19 +375,22 @@ class ProposalAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ("Header", {"fields": ("company", "created_by", "title", "currency")}),
-        ("Client Contact", {"fields": ("contact_name", "contact_email"),}),
         ("Totals", {"fields": (("amount_subtotal", "discount_total", "amount_tax", "amount_total"),)}),
         ("Deposit", {"fields": (("deposit_type", "deposit_value", "deposit_amount"), "remaining_due")}),
         ("Signing", {"fields": ("sign_token", "token_expires_at", "sign_link_preview", "sent_at", "viewed_at", "signed_at")}),
-        # NEW: PDF upload/replace
-        ("Access / File", {"fields": ("pdf",)}),
-        ("Approver / Countersign", {
+        # NEW:
+        ("Validity", {"fields": ("valid_until",)}),
+        ("Narrative (PDF)", {
             "fields": (
-                "approver_user",
-                "countersign_required",
-                ("countersigned_at", "countersigned_by"),
-                "countersign_notes",
-            )
+                "summary_md",
+                "included_md",
+                "overview_md",
+                "addons_md",
+                "maintenance_md",
+                "payment_terms_md",
+                "legal_terms_md",
+            ),
+            "classes": ("collapse",),
         }),
         ("Timestamps", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
     )

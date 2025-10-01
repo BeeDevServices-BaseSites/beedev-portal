@@ -1,5 +1,6 @@
 # proposalApp/models.py
-import os, uuid, datetime
+import os, uuid
+from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 import secrets
 from importlib import import_module
@@ -178,6 +179,16 @@ class ProposalDraft(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Narrative (for PDF)
+    valid_until       = models.DateField(null=True, blank=True)
+    summary_md        = models.TextField(blank=True)
+    included_md       = models.TextField(blank=True)
+    overview_md       = models.TextField(blank=True)
+    addons_md         = models.TextField(blank=True)
+    maintenance_md    = models.TextField(blank=True)
+    payment_terms_md  = models.TextField(blank=True)
+    legal_terms_md    = models.TextField(blank=True)
+
     submitted_at = models.DateTimeField(null=True, blank=True)
     approved_at = models.DateTimeField(null=True, blank=True)
     approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="proposal_drafts_approved")
@@ -290,7 +301,6 @@ class ProposalDraft(models.Model):
             self.save(update_fields=["estimate_tier", "estimate_low", "estimate_high", "updated_at"])
         return tier
 
-
     def recalc_totals(self, *, save=True):
         line_sum = Decimal("0.00")
         for li in self.items.all():
@@ -365,11 +375,38 @@ class ProposalDraft(models.Model):
                 amount_applied=self.discount_amount,
                 sort_order=0,
             )
+        
+        for n in self.notes.all().order_by("sort_order", "pk"):
+            ProposalSection.objects.create(
+                proposal=prop,
+                sort_order=n.sort_order,
+                subject=n.subject,
+                body_md=n.body_md,
+            )
         self.approval_status = self.ApprovalStatus.CONVERTED
         self.save(update_fields=["approval_status", "updated_at"])
         ProposalEvent.objects.create(proposal=prop, kind=ProposalEvent.Kind.CREATED, actor=actor)
         return prop
+    
+    @property
+    def valid_until_effective(self):
+        """
+        If valid_until isn’t set, default to created_at + 30 days (date only).
+        """
+        base = self.created_at or timezone.now()
+        return (self.valid_until or (base + timedelta(days=30))).date()
 
+class DraftNote(models.Model):
+    draft = models.ForeignKey("ProposalDraft", on_delete=models.CASCADE, related_name="notes")
+    sort_order = models.PositiveIntegerField(default=0)
+    subject = models.CharField(max_length=160)
+    body_md = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ("sort_order", "pk")
+
+    def __str__(self):
+        return f"{self.draft} · {self.subject}"
 
 class DraftItem(models.Model):
     """
@@ -448,14 +485,12 @@ class DraftItem(models.Model):
         self.draft.recalc_totals(save=True)
 
 
-
 # ======================================================================
 #                             PROPOSAL (FINAL)
 # ======================================================================
 
 def _signing_base() -> str:
     return getattr(settings, "PROPOSAL_SIGNING_URL_BASE", "").rstrip("/")
-
 
 class Proposal(models.Model):
     """Final proposal artifact with signing, recipients, events, and invoice linkage."""
@@ -674,7 +709,6 @@ class Proposal(models.Model):
             proj = Project.objects.create(**kwargs)
             return proj
 
-
 class ProposalLineItem(models.Model):
     proposal     = models.ForeignKey(Proposal, on_delete=models.CASCADE, related_name="line_items")
     sort_order   = models.PositiveIntegerField(default=0)
@@ -699,6 +733,17 @@ class ProposalLineItem(models.Model):
     def __str__(self):
         return f"{self.name} ({self.line_total})"
 
+class ProposalSection(models.Model):
+    proposal = models.ForeignKey("Proposal", on_delete=models.CASCADE, related_name="sections")
+    sort_order = models.PositiveIntegerField(default=0)
+    subject = models.CharField(max_length=160)
+    body_md = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ("sort_order", "pk")
+
+    def __str__(self):
+        return f"{self.proposal} · {self.subject}"
 
 class ProposalAppliedDiscount(models.Model):
     """
@@ -717,7 +762,6 @@ class ProposalAppliedDiscount(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.discount_code})"
-
 
 class ProposalRecipient(models.Model):
     proposal    = models.ForeignKey(Proposal, on_delete=models.CASCADE, related_name="recipients")
@@ -744,7 +788,6 @@ class ProposalViewer(models.Model):
 
     def __str__(self):
         return f"{self.user} can view {self.proposal}"
-
 
 class ProposalEvent(models.Model):
     class Kind(models.TextChoices):
