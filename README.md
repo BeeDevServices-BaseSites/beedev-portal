@@ -6,8 +6,15 @@ pip freeze > requirements.txt (to create/update file)
 To update your env with the required packages run:
 pip install -r requirements.txt
 
+# Updates:
+## As of 10/1/25:
+- Please run migrations and flush db to allow for new changes.  Proposal changes made. No longer able to currently convert although buttons are there function is broken while updates are made
+Make Migrations
+- python manage.py makemigrations
+- python manage.py migrate
 Flush data in db
-python manage.py flush --no-input
+- python manage.py flush --no-input
+SQL folder holds base data and will be re-updated later
 
 # On Mac weasyPrint may cause run issues:
 brew update
