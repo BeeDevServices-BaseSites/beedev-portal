@@ -20,6 +20,17 @@
     <span style="opacity:.7;">No PDF yet</span>
   {% endif %}</h2>
 </div>
+{% if proposal.pdf %}
+    <div class="mini_menu">
+        <form method="post" action="{% url 'proposal_staff:proposal_send' proposal.id %}">
+            {% csrf_token %}
+            <label>Recipient emails (comma/semicolon separated):</label>
+            <input type="text" name="emails" placeholder="name@company.com, other@company.com" required>
+            <button type="submit">Send to client</button>
+        </form>
+    </div>
+{% endif %}
+
 <div class="detail">
     <h3>{{proposal.title}}</h3>
     <table class="entry">

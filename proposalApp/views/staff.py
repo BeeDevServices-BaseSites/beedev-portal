@@ -229,3 +229,37 @@ def view_proposal_pdf(request, pk: int):
     # Show in-browser (inline) with a readable filename
     resp["Content-Disposition"] = f'inline; filename="{proposal.company.slug or "proposal"}-{proposal.pk}.pdf"'
     return resp
+
+@login_required
+def send_proposal(request, pk: int):
+    user = request.user
+    if not (user.is_active and (user.is_superuser or user.role in [User.Roles.ADMIN, User.Roles.OWNER, User.Roles.EMPLOYEE])):
+        raise PermissionDenied("Not allowed")
+
+    proposal = get_object_or_404(Proposal, pk=pk)
+
+    if request.method == "POST":
+        raw = (request.POST.get("emails") or "").strip()
+        if not raw:
+            messages.error(request, "Enter at least one recipient email.")
+            return redirect(reverse("proposal_staff:proposal_detail", args=[proposal.pk]))
+
+        emails = {e.strip().lower() for e in raw.replace(";", ",").split(",") if e.strip()}
+        if not emails:
+            messages.error(request, "No valid emails found.")
+            return redirect(reverse("proposal_staff:proposal_detail", args=[proposal.pk]))
+
+        # Upsert recipients
+        created = 0
+        for em in emails:
+            obj, was_created = ProposalRecipient.objects.get_or_create(proposal=proposal, email=em, defaults={"is_primary": True})
+            if was_created:
+                created += 1
+
+        # This will generate/refresh the token + fire your messenger hook
+        proposal.mark_sent(actor=user)
+
+        messages.success(request, f"Queued send to {len(emails)} recipient(s). (Added {created} new)")
+        return redirect(reverse("proposal_staff:proposal_detail", args=[proposal.pk]))
+
+    return redirect(reverse("proposal_staff:proposal_detail", args=[proposal.pk]))

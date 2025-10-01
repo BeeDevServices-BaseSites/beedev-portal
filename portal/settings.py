@@ -130,8 +130,12 @@ LOGIN_REDIRECT_URL = 'userApp:post_login'
 # LOGOUT_REDIRECT_URL = 'https://beedev-services.com/'
 LOGOUT_REDIRECT_URL = '/'
 PROSPECTS_CLIENT_MODEL = "companyApp.Company"
+
 # Base URL of your future signing page (view will look up Proposal by token)
-# PROPOSAL_SIGNING_URL_BASE = "https://portal.example.com/sign"
+# PROPOSAL_SIGNING_URL_BASE = "https://portal.bedev-services.com/proposals/s"
+PROPOSAL_SIGNING_URL_BASE = "http://127.0.0.1:8000/proposals/s"
+PROPOSAL_MESSENGER = "proposalApp.messenger:send_proposal"
+
 # Dotted-callables (set now or later)
 PROPOSAL_ACCOUNT_CREATOR = "proposalApp.hooks:create_account_for_signed_proposal"
 PROPOSAL_INVOICE_CREATOR = "proposalApp.hooks:create_invoice_for_deposit"
@@ -147,8 +151,17 @@ BRAND_EMAIL = "developers@beedev-services.com"
 BRAND_PHONE = "(845)271-7840"
 BRAND_ADDRESS = "Wappingers Falls, NY 12590"
 
+# Email Settings
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_USE_TLS = True
+EMAIL_PORT = 587
+EMAIL_HOST_USER = env('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
+EMAIL_TIMEOUT = 20
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
 
-
+print(EMAIL_HOST_USER)
 # Internationalization
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'US/Eastern'

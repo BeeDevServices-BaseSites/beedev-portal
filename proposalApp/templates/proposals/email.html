@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+    <body>
+        <p>Hello,</p>
+        <p>It was a pleasure meeting with you.  As promised please find below a link to your custom proposal for review and signature.</p>
+        <p>Once signed you will be prompted to create an account in our system which will then allow you to see the invoice associated to this proposal and allow you to make the deposit if one is required.</p>
+        <p>Please review your proposal:</p>
+        <p>
+            Project name: {{ proposal.title }} <br>
+            Company: {{ company.name }} <br>
+            Total: {{ proposal.amount_total }} <br>
+            <a href="{{ signing_url }}">Open and sign</a>
+        </p>
+        <p>
+            Thank you! <br>
+            BeeDev Services
+        </p>
+    </body>
+</html>

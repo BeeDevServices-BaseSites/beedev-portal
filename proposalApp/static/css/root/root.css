@@ -7,6 +7,7 @@
   --yb_border: linear-gradient(5deg, #000000 25%, #f2db1a 75%);
   --muted: #656363;
   --white-shadow: #FAFAFA;
+  --altmuted: #908d8d;
   --yellow-shadow: #f2dc1abd;
 }
 * {
