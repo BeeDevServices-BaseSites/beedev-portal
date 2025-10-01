@@ -14,7 +14,7 @@ Make Migrations
 - python manage.py migrate
 Flush data in db
 - python manage.py flush --no-input
-SQL folder holds base data and will be re-updated later
+SQL folder holds a seed file that has auth group permissions and proposal base data
 
 # On Mac weasyPrint may cause run issues:
 brew update
