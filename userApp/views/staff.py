@@ -3,7 +3,7 @@ from django.core.exceptions import PermissionDenied
 from django.shortcuts import render, get_object_or_404
 from ..models import User, ClientProfile, EmployeeProfile
 from prospectApp.models import Prospect
-from companyApp.models import CompanyContact
+from companyApp.models import CompanyContact, Company
 from core.utils.context import base_ctx
 from django.db.models import Q
 
@@ -62,7 +62,8 @@ def view_all_clients(request):
         company__memberships__is_active=True,
         company__memberships__user__role=User.Roles.CLIENT,
     )
-    
+    test = Prospect.objects.all()
+    print(test)
     title = 'Contacts Admin'
     ctx = {"user_obj": user, "contacts": contacts, "prospects": prospects, "lost": lost, "dnc": dnc, "won": won}
     ctx.update(base_ctx(request, title=title))

@@ -5,6 +5,9 @@
   --white: #F5F5F5;
   --green: #426e54;
   --yb_border: linear-gradient(5deg, #000000 25%, #f2db1a 75%);
+  --alt_green: #9FC6Af;
+  --grey: #aeacac;
+  --alt_grey: #8c8c8c;
 }
 * {
   padding: 0;
@@ -135,6 +138,7 @@ body main .detail h3 {
   border: 4px groove transparent;
   border-image: var(--yb_border);
   border-image-slice: 1;
+  font-size: 1.4em;
 }
 body main .detail .entry {
   width: 100%;
@@ -154,6 +158,19 @@ body main .detail .alt_entry {
   margin: 1em 0;
 }
 body main .detail .alt_entry th {
-  background-color: var(--green);
-  color: var(--white);
+  font-size: 1.1em;
+  background-color: var(--alt_green);
+  color: var(--black);
+}
+body main .detail tr:nth-child(odd) {
+  background-color: var(--grey);
+}
+body main .detail tr:hover {
+  background-color: var(--alt_grey);
+}
+body main .detail td {
+  padding: 0.5em 0;
+}
+body main .detail .blank {
+  text-align: center;
 }

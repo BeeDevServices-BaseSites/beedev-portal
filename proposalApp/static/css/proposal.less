@@ -53,6 +53,7 @@ body {
                 padding: 1em;
                 margin-bottom: .5em;
                 .yb-border();
+                font-size: 1.4em;
             }
             .entry {
                 width: 100%;
@@ -71,10 +72,24 @@ body {
             }
             .alt_entry {
                 margin: 1em 0;
+
                 th {
-                    background-color: var(--green);
-                    color: var(--white);
+                    font-size: 1.1em;
+                    background-color: var(--alt_green);
+                    color: var(--black);
                 }
+            }
+            tr:nth-child(odd) {
+                background-color: var(--grey);
+            }
+            tr:hover {
+                background-color: var(--alt_grey);
+            }
+            td {
+                padding: .5em 0;
+            }
+            .blank {
+                text-align: center;
             }
         }
         form {
