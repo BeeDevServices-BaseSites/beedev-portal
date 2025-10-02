@@ -55,7 +55,6 @@ def proposal_home(request):
         p.id: (p.events.all()[0] if p.events.all() else None)
         for p in proposals
     }
-    print(proposals, last_events_by_id)
     title = "Proposal Admin"
     ctx = {"user_obj": user, "read_only": True, "drafts": drafts, "proposals": proposals, "last_events_by_id": last_events_by_id}
     ctx.update(base_ctx(request, title=title))
@@ -331,7 +330,7 @@ def view_proposal_pdf(request, pk: int):
     if not proposal.pdf:
         messages.info(request, "No PDF has been generated yet.")
         return redirect(reverse("proposal_staff:proposal_detail", args=[proposal.id]))
-    print(proposal)
+
     # Stream the PDF inline
     f = proposal.pdf.open("rb")
     resp = FileResponse(f, content_type="application/pdf")
