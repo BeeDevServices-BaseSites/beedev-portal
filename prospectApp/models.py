@@ -59,11 +59,21 @@ class Prospect(TimeStamped):
     do_not_contact = models.BooleanField(default=False)
     unsubscribe_token = models.CharField(max_length=32, unique=True, editable=False, blank=True)
 
+    company = models.ForeignKey(
+        Company, null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="prospects"
+    )
+
     def save(self, *args, **kwargs):
         if not self.unsubscribe_token:
             self.unsubscribe_token = secrets.token_hex(16)
         self.email = (self.email or "").strip().lower()
         super().save(*args, **kwargs)
+
+    @property
+    def onboarded(self) -> bool:
+        return bool(self.company_id and self.company.has_client_users)
 
     @property
     def has_website(self): 
@@ -85,7 +95,7 @@ class Prospect(TimeStamped):
         # Company name (fall back across common prospect fields)
         company_name = _coalesce(
             getattr(self, "company_name", None),
-            getattr(self, "name", None),             # some prospects use 'name'
+            getattr(self, "name", None),
         ) or "Unnamed Company"
 
         # Contact name
@@ -108,13 +118,12 @@ class Prospect(TimeStamped):
             defaults={
                 "primary_contact_name": contact_name,
                 "primary_email": contact_email,
-                # Optional extras if you have them on Prospect:
                 "phone": getattr(self, "phone", "") or "",
-                "website": getattr(self, "website", "") or "",
+                "website": getattr(self, "website_url", "") or "",
+                "status": Company.Status.CONVERTED_PROSPECT,
             },
         )
 
-        # If company already existed, optionally fill empty fields
         if not created and update_if_exists:
             fields_to_update = []
             if contact_name and not company.primary_contact_name:
@@ -126,7 +135,6 @@ class Prospect(TimeStamped):
             if fields_to_update:
                 company.save(update_fields=fields_to_update)
 
-        # Create a primary CompanyContact only if we have an email (to avoid duplicate blank emails)
         if contact_email:
             CompanyContact.objects.get_or_create(
                 company=company,
@@ -138,5 +146,35 @@ class Prospect(TimeStamped):
                     "is_primary": True,
                 },
             )
+        updates = []
+        if not self.company_id:
+            self.company = company
+            updates.append("company")
+        if self.status != self.Status.WON:
+            self.status = self.Status.WON
+            updates.append("status")
+        if updates:
+            self.save(update_fields=updates)
 
         return company
+    
+class ProspectNote(models.Model):
+    """
+    Running notes log attached to a Prospect (does not overwrite Prospect.notes).
+    """
+    prospect    = models.ForeignKey(Prospect, on_delete=models.CASCADE, related_name="notes_log")
+    subject     = models.CharField(max_length=160, blank=True)
+    body_md     = models.TextField(blank=True)
+    is_pinned   = models.BooleanField(default=False)
+
+    created_by  = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="prospect_notes_created"
+    )
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-is_pinned", "-created_at", "pk")
+
+    def __str__(self):
+        return self.subject or f"Note #{self.pk}"

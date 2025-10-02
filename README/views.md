@@ -24,7 +24,7 @@
 | /prospects/# | One Prospect | prospectApp | Staff -HR | Hide Won Gate needed | Created |
 | /prospects/new | Create Prospect | prospectApp | Staff -HR | CSS | Created |
 | /prospects/#/edit | Edit Prospect Detail | prospectApp | Staff -HR | CSS | Created |
-| /prospects/#/status | Updated Prospect Status | prospectApp | Staff -HR | CSS | Created |
+| /prospects/#/status | Updated Prospect Status | prospectApp | Staff -HR | Won Converts to Company not client as no log in yet | Created |
 | /companies | Company Admin | companyApp | Staff -HR | CSS | Created |
 | /companies/company/# | One Company | companyApp | Staff -HR | CSS | Created |
 | /companies/company/add | Create Company | companyApp | Staff -HR | CSS | Created |

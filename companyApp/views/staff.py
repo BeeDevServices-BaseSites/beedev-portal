@@ -30,7 +30,7 @@ def company_home(request):
         raise PermissionDenied("Not allowed")
     
     companies = Company.objects.all()
-    prospects = Prospect.objects.all()
+    prospects = Prospect.objects.exclude(status="WON")
 
     title = "Company Admin"
     ctx = {"user_obj": user, "read_only": True, "companies": companies, "prospects": prospects}

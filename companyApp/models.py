@@ -35,6 +35,7 @@ class Company(models.Model):
     # Account-level status (relationship with you)
     class Status(models.TextChoices):
         PROSPECT = "PROSPECT", "Prospect"
+        CONVERTED_PROSPECT = "CONVERTED_PROSPECT", "Converted Prospect"
         ACTIVE   = "ACTIVE",   "Active"
         INACTIVE = "INACTIVE", "Inactive"
 
@@ -84,7 +85,7 @@ class Company(models.Model):
     )
 
     # Relationship + pipeline
-    status          = models.CharField(max_length=20, choices=Status.choices, default=Status.PROSPECT)
+    status          = models.CharField(max_length=20, choices=Status.choices, default=Status.CONVERTED_PROSPECT)
     pipeline_status = models.CharField(max_length=20, choices=PipelineStatus.choices, blank=True, default="")
 
     # From sheet: link to the consultation/profile sheet
@@ -139,6 +140,14 @@ class Company(models.Model):
         except Exception:
             pass
         return static("img/company-logo-placeholder.svg")
+    
+    @property
+    def has_client_users(self) -> bool:
+        from userApp.models import User
+        return self.memberships.filter(
+            is_active=True,
+            user__role=User.Roles.CLIENT
+        ).exists()
     
 
 class CompanyMembership(models.Model):

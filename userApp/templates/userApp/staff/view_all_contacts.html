@@ -33,6 +33,27 @@
         </table>
     </div>
     <div class="detail">
+        <h3>Won Clients</h3>
+        <table class="entry alt_entry">
+            <tr>
+                <th>Name</th>
+                <th>Company Name</th>
+                <th>Prospect Status</th>
+            </tr>
+            {% for w in won %}
+                <tr>
+                    <td><a href="#">{{w.full_name}}</a></td>
+                    <td>{{w.company_name}}</td>
+                    <td>{{w.status}}</td>
+                </tr>
+            {% empty %}
+            <tr>
+                <td>No Won Clients found</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    <div class="detail">
         <h3>Current Clients</h3>
         <table class="entry alt_entry">
             <tr>
@@ -50,6 +71,48 @@
                 <tr>
                     <td>No clients found</td>
                 </tr>
+            {% endfor %}
+        </table>
+    </div>
+    <div class="detail">
+        <h3>DNC</h3>
+        <table class="entry alt_entry">
+            <tr>
+                <th>Name</th>
+                <th>Company Name</th>
+                <th>Prospect Status</th>
+            </tr>
+            {% for d in dnc %}
+                <tr>
+                    <td><a href="#">{{d.full_name}}</a></td>
+                    <td>{{d.company_name}}</td>
+                    <td>{{d.status}}</td>
+                </tr>
+            {% empty %}
+            <tr>
+                <td>No Do Not Contact Clients</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    <div class="detail">
+        <h3>Lost Clients</h3>
+        <table class="entry alt_entry">
+            <tr>
+                <th>Name</th>
+                <th>Company Name</th>
+                <th>Prospect Status</th>
+            </tr>
+            {% for l in lost %}
+                <tr>
+                    <td><a href="{% url 'prospects:view_one_prospect' l.pk %}">{{l.full_name}}</a></td>
+                    <td>{{l.company_name}}</td>
+                    <td>{{l.status}}</td>
+                </tr>
+            {% empty %}
+            <tr>
+                <td>No lost prospects found</td>
+            </tr>
             {% endfor %}
         </table>
     </div>

@@ -3,8 +3,8 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect, render, get_object_or_404
 from core.utils.context import base_ctx
-from ..forms import ProspectForm, ProspectEditForm, ProspectStatusForm
-from ..models import Prospect
+from ..forms import ProspectForm, ProspectEditForm, ProspectStatusForm, ProspectNoteQuickForm
+from ..models import Prospect, ProspectNote
 from companyApp.models import Company
 from userApp.models import User
 from django.urls import reverse
@@ -98,17 +98,38 @@ def update_prospect_status(request, pk: int):
 
     if request.method == "POST":
         form = ProspectStatusForm(request.POST, instance=prospect)
-        if form.is_valid():
+        note_form = ProspectNoteQuickForm(request.POST)
+
+        if form.is_valid() and note_form.is_valid():
             old_status = getattr(prospect, "status", None)
+
+            # Save only changed fields to keep audits clean
+            changed_fields = list(form.changed_data)
             prospect = form.save(commit=False)
+            if changed_fields:
+                try:
+                    prospect.save(update_fields=changed_fields)
+                except TypeError:
+                    # update_fields=None would error; fall back to normal save
+                    prospect.save()
+
+            # Optionally append a running note entry if provided
+            subj = (note_form.cleaned_data.get("subject") or "").strip()
+            body = (note_form.cleaned_data.get("body_md") or "").strip()
+            pinned = bool(note_form.cleaned_data.get("is_pinned"))
+            if subj or body:
+                ProspectNote.objects.create(
+                    prospect=prospect,
+                    subject=subj or "Note",
+                    body_md=body,
+                    is_pinned=pinned,
+                    created_by=request.user if request.user.is_authenticated else None,
+                )
+                messages.success(request, "Note added to prospect history.")
 
             new_status = getattr(prospect, "status", None)
 
-            # Always save the status change first
-            prospect.save(update_fields=["status"] if "status" in form.changed_data else None)
-
             if new_status == "WON":
-                # Let the model handle copying name/email + creating primary CompanyContact
                 company = prospect.convert_to_company(actor=request.user)
                 messages.success(
                     request,
@@ -117,17 +138,26 @@ def update_prospect_status(request, pk: int):
                 )
                 return redirect(reverse("company_staff:company_detail", args=[company.pk]))
 
-            messages.success(request, f"Status updated from {old_status or '-'} to {new_status or '-'}")
+            if changed_fields:
+                messages.success(
+                    request,
+                    f"Status/fields updated ({', '.join(changed_fields)}) — "
+                    f"status {old_status or '-'} → {new_status or '-'}"
+                )
+            else:
+                messages.info(request, "No changes detected.")
+
             return redirect(reverse("prospects:prospect_status", args=[prospect.pk]))
     else:
         form = ProspectStatusForm(instance=prospect)
+        note_form = ProspectNoteQuickForm()
 
     name_for_title = getattr(prospect, "full_name", None) \
                      or getattr(prospect, "company_name", None) \
                      or getattr(prospect, "name", f"#{prospect.pk}")
     title = f"Update Status — {name_for_title}"
 
-    ctx = {"user_obj": request.user, "prospect": prospect, "form": form}
+    ctx = {"user_obj": request.user, "prospect": prospect, "form": form, "note_form": note_form}
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title
     return render(request, "prospectApp/prospect_status.html", ctx)
