@@ -14,7 +14,7 @@ def create_account_for_signed_proposal(proposal):
 
 def create_invoice_for_deposit(proposal, amount: Decimal, kind: str):
     try:
-        from invoiceApp.models import Invoice  # if your invoice app/model exists
+        from invoiceApp.models import Invoice
         inv = Invoice.objects.create(
             company=proposal.company,
             title=f"Deposit for {proposal.title}",
@@ -29,5 +29,4 @@ def create_invoice_for_deposit(proposal, amount: Decimal, kind: str):
         return Stub()
 
 def send_proposal_email(proposal, recipients, signing_url, **kwargs):
-    # Implement your email delivery here (send_mail / provider SDK)
     return None

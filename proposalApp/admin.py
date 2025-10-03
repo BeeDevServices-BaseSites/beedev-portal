@@ -358,7 +358,7 @@ class ProposalAdmin(admin.ModelAdmin):
         "remaining_due", "sent_at", "signed_at",
         "countersign_flag",
         "sign_link_short",
-        "pdf_link",  # NEW column
+        "pdf_link",
         "created_at",
     )
     list_filter = ("company", "deposit_type", "countersign_required", "created_at")
@@ -378,7 +378,7 @@ class ProposalAdmin(admin.ModelAdmin):
         ("Totals", {"fields": (("amount_subtotal", "discount_total", "amount_tax", "amount_total"),)}),
         ("Deposit", {"fields": (("deposit_type", "deposit_value", "deposit_amount"), "remaining_due")}),
         ("Signing", {"fields": ("sign_token", "token_expires_at", "sign_link_preview", "sent_at", "viewed_at", "signed_at")}),
-        # NEW:
+
         ("Validity", {"fields": ("valid_until",)}),
         ("Narrative (PDF)", {
             "fields": (
@@ -420,7 +420,6 @@ class ProposalAdmin(admin.ModelAdmin):
         return "…"
     countersign_flag.short_description = "Countersign"
 
-    # ---- nice UI bits ----
     def sign_link_preview(self, obj):
         if not obj.pk:
             return "-"
@@ -436,7 +435,6 @@ class ProposalAdmin(admin.ModelAdmin):
         return f"...{obj.sign_token[-8:]}"
     sign_link_short.short_description = "Sign token"
 
-    # NEW: quick PDF link in list
     def pdf_link(self, obj):
         try:
             if obj.pdf:
@@ -446,7 +444,6 @@ class ProposalAdmin(admin.ModelAdmin):
         return "—"
     pdf_link.short_description = "PDF"
 
-    # ---- actions ----
     @admin.action(description="Generate signing link")
     def action_generate_link(self, request, queryset):
         n = 0
@@ -498,21 +495,17 @@ class ProposalAdmin(admin.ModelAdmin):
         skipped_existing = 0
 
         for p in queryset:
-            # Only allow creating a project once the client has signed
             if not getattr(p, "signed_at", None):
                 skipped_unsigned += 1
                 continue
 
-            # Already has a project?
             if getattr(p, "projects", None) and p.projects.exists():
                 skipped_existing += 1
                 continue
 
-            # Prefer approver or creator as manager; kickoff today = True
             proj = p.create_project(
                 actor=request.user,
                 kickoff_today=True,
-                # manager defaults handled in create_project()
             )
             if proj:
                 created += 1

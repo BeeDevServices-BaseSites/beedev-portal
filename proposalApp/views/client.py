@@ -3,12 +3,15 @@ from django.core.exceptions import PermissionDenied
 from django.shortcuts import render
 from ..models import Proposal, ProposalLineItem
 from core.utils.context import base_ctx
+from userApp.models import User
+
+def _allowed_users(u: User) -> bool:
+    return u.is_active and u.role in {User.Roles.CLIENT}
 
 @login_required
 def view_all_client_proposals(request):
     user = request.user
-    allowed_roles = {user.Roles.CLIENT}
-    if getattr(user, "role", None) not in allowed_roles:
+    if not _allowed_users(request.user):
         raise PermissionDenied("Not allowed")
     
     title = "Proposals"

@@ -32,14 +32,14 @@ def logo_upload_to(instance, filename):
 #                              COMPANY
 # =======================================================================
 class Company(models.Model):
-    # Account-level status (relationship with you)
+    # Account-level status
     class Status(models.TextChoices):
         PROSPECT = "PROSPECT", "Prospect"
         CONVERTED_PROSPECT = "CONVERTED_PROSPECT", "Converted Prospect"
         ACTIVE   = "ACTIVE",   "Active"
         INACTIVE = "INACTIVE", "Inactive"
 
-    # Project/pipeline status (from spreadsheet "Status")
+    # Project/pipeline status
     class PipelineStatus(models.TextChoices):
         NEW         = "NEW",         "New"
         HOLDING     = "HOLDING",     "Holding"
@@ -59,7 +59,7 @@ class Company(models.Model):
         blank=True,
     )
 
-    # Pre-account primary contact info (optional; use CompanyContact for multiples)
+    # Pre-account primary contact info
     primary_contact_name = models.CharField(max_length=120, blank=True)
     primary_email        = models.EmailField(blank=True)
     phone                = models.CharField(max_length=30, blank=True)
@@ -88,7 +88,6 @@ class Company(models.Model):
     status          = models.CharField(max_length=20, choices=Status.choices, default=Status.CONVERTED_PROSPECT)
     pipeline_status = models.CharField(max_length=20, choices=PipelineStatus.choices, blank=True, default="")
 
-    # From sheet: link to the consultation/profile sheet
     consultation_sheet_url = models.URLField(blank=True)
     first_contact_at = models.DateField(null=True, blank=True)
     last_contact_at  = models.DateField(null=True, blank=True)
@@ -110,7 +109,6 @@ class Company(models.Model):
             models.Index(fields=["status"]),
             models.Index(fields=["pipeline_status"]),
         ]
-        # (No bad constraints here)
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -128,10 +126,6 @@ class Company(models.Model):
     
     @property
     def logo_url(self) -> str:
-        """
-        Priority: external URL (Drive) > uploaded logo (MEDIA) > static placeholder.
-        Safe for templates.
-        """
         if getattr(self, "logo_external_url", ""):
             return self.logo_external_url
         try:
@@ -152,7 +146,7 @@ class Company(models.Model):
 
 class CompanyMembership(models.Model):
     class Role(models.TextChoices):
-        ACCOUNT_ADMIN = "ACCOUNT_ADMIN", "Account Admin"   # was OWNER
+        ACCOUNT_ADMIN = "ACCOUNT_ADMIN", "Account Admin"
         MANAGER       = "MANAGER",       "Manager"
         MEMBER        = "MEMBER",        "Member"
         BILLING_ONLY  = "BILLING_ONLY",  "Billing Only"
@@ -215,9 +209,6 @@ class CompanyContact(models.Model):
         ]
 
     def clean(self):
-        """
-        MySQL-safe enforcement: at most one primary contact per company.
-        """
         super().clean()
         if self.is_primary and self.company_id:
             qs = CompanyContact.objects.filter(company_id=self.company_id, is_primary=True)
@@ -234,10 +225,6 @@ class CompanyContact(models.Model):
 #                          COMPANY LINK
 # =======================================================================
 class CompanyLink(models.Model):
-    """
-    Links associated with a Company.
-    Some are client-visible; others are internal (employee-only).
-    """
     class Visibility(models.TextChoices):
         EMPLOYEE = "EMPLOYEE", "Employee only"
         SHARED   = "SHARED",   "Client & Employee"
@@ -254,7 +241,7 @@ class CompanyLink(models.Model):
         OTHER      = "OTHER",      "Other"
 
     company     = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="links")
-    label       = models.CharField(max_length=120) # e.g., "Preview Site", "Production", "Figma"
+    label       = models.CharField(max_length=120)
     url         = models.URLField(blank=True)
     notes       = models.TextField(blank=True)
     section     = models.CharField(max_length=20, choices=Section.choices, default=Section.GENERAL, blank=True)
@@ -263,7 +250,6 @@ class CompanyLink(models.Model):
     is_active   = models.BooleanField(default=True)
     sort_order  = models.PositiveIntegerField(default=0)
 
-    # Non-secret hints about credentials
     key_name    = models.CharField(max_length=120, blank=True, help_text="Name of key/credential (do not store secrets)")
     key_hint    = models.CharField(max_length=200, blank=True, help_text="Where the key lives (e.g., vault ref)")
 
@@ -312,7 +298,6 @@ class DncEntry(models.Model):
         EMAIL = "EMAIL", "Email"
         PHONE = "PHONE", "Phone"
 
-    # Attach to either/both a user or a prospect contact
     user    = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
         on_delete=models.SET_NULL, related_name="dnc_entries"
@@ -341,7 +326,7 @@ class DncEntry(models.Model):
 
     class Meta:
         ordering = ("-is_active", "channel", "value_normalized")
-        unique_together = (("channel", "value_normalized", "is_active"),)  # no two active entries for same value/channel
+        unique_together = (("channel", "value_normalized", "is_active"),)
         indexes = [
             models.Index(fields=["channel", "value_normalized", "is_active"]),
             models.Index(fields=["user", "is_active"]),
@@ -355,7 +340,6 @@ class DncEntry(models.Model):
 
     @staticmethod
     def _norm_phone(v: str) -> str:
-        # basic normalization: keep digits only
         return re.sub(r"\D+", "", v or "")
 
     def clean(self):
@@ -365,7 +349,6 @@ class DncEntry(models.Model):
         if not self.value_raw:
             raise ValidationError({"value_raw": "This field is required."})
 
-        # normalize
         if self.channel == self.Channel.EMAIL:
             self.value_normalized = self._norm_email(self.value_raw)
         elif self.channel == self.Channel.PHONE:
@@ -376,7 +359,6 @@ class DncEntry(models.Model):
         if not self.value_normalized:
             raise ValidationError({"value_raw": "Provide a valid value."})
 
-        # Enforce only one ACTIVE entry per (channel, normalized)
         if self.is_active:
             qs = DncEntry.objects.filter(
                 channel=self.channel,
@@ -389,7 +371,6 @@ class DncEntry(models.Model):
                 raise ValidationError({"value_raw": "An active DNC already exists for this value."})
 
     def save(self, *args, **kwargs):
-        # ensure normalized is set even if admin bypasses full_clean in some paths
         if self.channel == self.Channel.EMAIL:
             self.value_normalized = self._norm_email(self.value_raw)
         elif self.channel == self.Channel.PHONE:

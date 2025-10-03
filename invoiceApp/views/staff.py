@@ -4,12 +4,18 @@ from django.views.generic import TemplateView
 from django.shortcuts import render, get_object_or_404
 from core.utils.context import base_ctx
 from ..models import Invoice
+from userApp.models import User
+
+def _allowed_staff(u: User) -> bool:
+    return u.is_active and u.role in {User.Roles.EMPLOYEE, User.Roles.ADMIN, User.Roles.OWNER}
+
+def _allowed_management(u: User) -> bool:
+    return u.is_active and u.role in {User.Roles.ADMIN, User.Roles.OWNER}
 
 @login_required
 def invoice_home(request):
     user = request.user
-    allowed_roles = {user.Roles.ADMIN, user.Roles.OWNER}
-    if getattr(user, "role", None) not in allowed_roles:
+    if not _allowed_management(request.user):
         raise PermissionDenied("Not allowed")
     
     invoices = Invoice.objects.all()

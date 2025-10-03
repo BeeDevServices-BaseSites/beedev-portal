@@ -4,7 +4,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from .models import Invoice, InvoiceLineItem, InvoiceAppliedDiscount, Payment
 
-# ---- permission helpers (same pattern) ----
+# ---- permission helpers ----
 def is_owner(u):
     return u.is_active and (u.is_superuser or u.groups.filter(name="Owner").exists())
 
@@ -17,7 +17,7 @@ def is_hr(u):
 def is_plain_staff(u):
     return u.is_active and u.is_staff and not (is_owner(u) or is_admin(u) or is_hr(u))
 
-
+# -------- Inlines --------
 class InvoiceLineItemInline(admin.TabularInline):
     model = InvoiceLineItem
     extra = 0
@@ -37,14 +37,12 @@ class PaymentInline(admin.TabularInline):
     extra = 0
     fields = (
         "amount", "method", "reference", "payer_user", "received_at", "notes", "created_by",
-        # --- Stripe (read-only in inline to avoid clutter) ---
         "stripe_payment_intent_id", "stripe_charge_id", "stripe_payment_method_id", "stripe_receipt_url", "gateway_status",
     )
     autocomplete_fields = ("payer_user", "created_by")
     readonly_fields = ("stripe_payment_intent_id", "stripe_charge_id", "stripe_payment_method_id", "stripe_receipt_url", "gateway_status")
 
     def has_add_permission(self, request, obj):
-        # HR can record payments? Keep consistent with your policy:
         return is_owner(request.user) or is_admin(request.user)
 
     def has_change_permission(self, request, obj=None):
@@ -60,7 +58,6 @@ class InvoiceAdmin(admin.ModelAdmin):
         "number", "company", "customer_user", "status",
         "total", "amount_paid", "balance_display",
         "due_date",
-        # --- Stripe glance ---
         "stripe_status", "stripe_invoice_short", "stripe_pi_short",
         "updated_at",
     )
@@ -73,7 +70,6 @@ class InvoiceAdmin(admin.ModelAdmin):
         ("Header", {"fields": ("number", "company", "proposal", "customer_user", "customer_contact", "currency", "issue_date", "due_date", "status")}),
         ("Amounts", {"fields": ("subtotal", "discount_total", "tax_total", "total", "minimum_due", "amount_paid")}),
         ("Access / File", {"fields": ("view_token", "pdf")}),
-        # --- Stripe pane ---
         ("Stripe", {
             "fields": (
                 "stripe_status",
@@ -94,7 +90,6 @@ class InvoiceAdmin(admin.ModelAdmin):
         return format_html("<b>{}</b>", f"{value:.2f}")
     balance_display.short_description = "Balance Due"
 
-    # Quick link to hosted invoice if present
     def stripe_invoice_link(self, obj):
         url = getattr(obj, "stripe_hosted_invoice_url", "") or ""
         if url:
@@ -102,7 +97,6 @@ class InvoiceAdmin(admin.ModelAdmin):
         return "—"
     stripe_invoice_link.short_description = "Hosted Invoice"
 
-    # Compact shorts for list_display
     def stripe_invoice_short(self, obj):
         sid = getattr(obj, "stripe_invoice_id", "") or ""
         return f"...{sid[-8:]}" if sid else "—"
@@ -113,7 +107,6 @@ class InvoiceAdmin(admin.ModelAdmin):
         return f"...{pid[-8:]}" if pid else "—"
     stripe_pi_short.short_description = "PI"
 
-    # Permissions
     def has_module_permission(self, request): return request.user.is_staff
     def has_add_permission(self, request): return is_owner(request.user) or is_admin(request.user)
     def has_change_permission(self, request, obj=None):
@@ -128,7 +121,6 @@ class InvoiceAdmin(admin.ModelAdmin):
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
 
-    # Actions
     def recalc_totals_action(self, request, queryset):
         for inv in queryset:
             inv.recalc_totals(save=True)
@@ -165,7 +157,6 @@ class PaymentAdmin(admin.ModelAdmin):
     list_display = (
         "invoice", "amount", "method", "gateway_status",
         "payer_user", "received_at", "reference",
-        # Stripe glance
         "stripe_pi_short", "stripe_charge_short",
     )
     list_filter  = ("method", "gateway_status")
@@ -180,13 +171,11 @@ class PaymentAdmin(admin.ModelAdmin):
         "invoice", "amount", "method", "reference",
         "payer_user", "received_at", "notes",
         "gateway_status",
-        # Stripe block
         "stripe_payment_intent_id", "stripe_charge_id", "stripe_payment_method_id", "stripe_receipt_url",
         "gateway_payload",
         "created_by", "created_at", "updated_at",
     )
 
-    # Compact shorts
     def stripe_pi_short(self, obj):
         pid = getattr(obj, "stripe_payment_intent_id", "") or ""
         return f"...{pid[-8:]}" if pid else "—"

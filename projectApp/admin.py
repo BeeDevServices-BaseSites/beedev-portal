@@ -9,11 +9,9 @@ from companyApp.models import CompanyMembership
 from .models import (
     Project, ProjectMember, ProjectMilestone, ProjectEnvironment,
     ProjectLink, ProjectUpdate, ProjectUpdateAttachment, ProjectViewer,
-    # Additions:
     ProjectTask,
 )
 
-# If you created ProjectWeekNote (optional), import it; if not, comment this line.
 try:
     from .models import ProjectWeekNote
     HAS_WEEK_NOTE = True
@@ -83,7 +81,6 @@ class ProjectMemberInline(admin.TabularInline):
     fields = ("user", "role", "is_active", "added_at")
     readonly_fields = ("added_at",)
 
-    # Limit selectable users to (staff OR members of the project's company)
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         field = super().formfield_for_foreignkey(db_field, request, **kwargs)
         if db_field.name == "user":
@@ -120,7 +117,6 @@ class ProjectViewerInline(admin.TabularInline):
     fields = ("user", "granted_by", "granted_at")
     readonly_fields = ("granted_at",)
 
-    # Limit selectable users to members of the project's company
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         field = super().formfield_for_foreignkey(db_field, request, **kwargs)
         if db_field.name == "user":
@@ -132,12 +128,10 @@ class ProjectViewerInline(admin.TabularInline):
                 field.queryset = field.queryset.filter(pk__in=member_ids)
         return field
 
-    # Preserve your pattern of capturing request on get_formset
     def get_formset(self, request, obj=None, **kwargs):
         self.request = request
         return super().get_formset(request, obj, **kwargs)
 
-# ---- NEW: inline tasks on Project ----
 class ProjectTaskInline(admin.TabularInline):
     model = ProjectTask
     extra = 0
@@ -174,13 +168,12 @@ class ProjectAdmin(admin.ModelAdmin):
         ProjectMilestoneInline,
         ProjectEnvironmentInline,
         ProjectLinkInline,
-        ProjectTaskInline,      # << added
+        ProjectTaskInline,
         ProjectViewerInline,
     ]
 
     list_display = (
         "name", "company", "status", "stage",
-        # priority surface
         "priority", "show_priority_to_client",
         "client_can_view_status", "client_can_view_links", "client_can_view_description",
         "percent_complete", "start_date", "target_launch_date", "actual_launch_date",
@@ -189,7 +182,6 @@ class ProjectAdmin(admin.ModelAdmin):
     list_filter = (
         "company", "status", "stage",
         "is_active",
-        # priority & visibility
         "priority", "show_priority_to_client",
         "client_can_view_status", "client_can_view_links", "client_can_view_description",
     )
@@ -209,12 +201,10 @@ class ProjectAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at", "updated_at")
     autocomplete_fields = ("company", "proposal", "manager", "created_by")
 
-    # Pass current object to inlines (for filtering user choices)
     def get_form(self, request, obj=None, **kwargs):
         request._current_project_obj = obj
         return super().get_form(request, obj, **kwargs)
 
-    # Permissions (block HR; Owner/Admin/staff allowed per your pattern)
     def has_module_permission(self, request):
         if is_hr(request.user) or not request.user.is_staff:
             return False
@@ -272,7 +262,6 @@ class ProjectTaskAdmin(admin.ModelAdmin):
     )
 
     def has_module_permission(self, request):
-        # Allow staff to view/manage tasks
         return request.user.is_staff
 
     def has_add_permission(self, request):
@@ -311,7 +300,6 @@ class ProjectUpdateAdmin(admin.ModelAdmin):
     readonly_fields = ("posted_at",)
 
     def has_module_permission(self, request):
-        # Allow staff access; keep clients/HR out of admin for updates
         return request.user.is_staff
 
     def has_add_permission(self, request):

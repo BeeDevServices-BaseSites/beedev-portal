@@ -17,23 +17,19 @@ def _allowed_staff(u: User) -> bool:
 @login_required
 def add_prospect(request):
     user = request.user
-    # match your existing role-gate style
-    allowed_roles = {user.Roles.EMPLOYEE, user.Roles.ADMIN, user.Roles.OWNER}
-    if getattr(user, "role", None) not in allowed_roles:
+    if not _allowed_staff(request.user):
         raise PermissionDenied("Not allowed")
 
     if request.method == "POST":
         form = ProspectForm(request.POST)
         if form.is_valid():
             prospect = form.save(commit=False)
-            # if your model has these fields, they’ll set; otherwise remove
+
             if hasattr(prospect, "created_by"):
                 prospect.created_by = user
             prospect.save()
             messages.success(request, "Prospect added successfully.")
-            # send them somewhere useful; adjust as needed
-            # if Prospect._meta.get_field("id"):
-                # return redirect("prospectApp:detail", pk=prospect.pk)
+
             return redirect("userApp:view_all_clients")
         else:
             messages.error(request, "Please fix the errors below.")
@@ -49,13 +45,13 @@ def add_prospect(request):
 @login_required
 def view_prospect(request, pk: int):
     user = request.user
-    allowed_roles = {user.Roles.EMPLOYEE, user.Roles.ADMIN, user.Roles.OWNER}
-    if getattr(user, 'role', None) not in allowed_roles:
+    if not _allowed_staff(request.user):
         raise PermissionDenied("Not allowed")
     
     prospect = get_object_or_404(Prospect, pk=pk)
+    notes = ProspectNote.objects.filter(prospect_id=pk)
     title = f"{prospect.full_name}'s Prospect File"
-    ctx = {"user_obj": user, "prospect": prospect}
+    ctx = {"user_obj": user, "prospect": prospect, "notes": notes}
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title
     return render(request, "prospectApp/view_one_prospect.html", ctx)
@@ -103,17 +99,14 @@ def update_prospect_status(request, pk: int):
         if form.is_valid() and note_form.is_valid():
             old_status = getattr(prospect, "status", None)
 
-            # Save only changed fields to keep audits clean
             changed_fields = list(form.changed_data)
             prospect = form.save(commit=False)
             if changed_fields:
                 try:
                     prospect.save(update_fields=changed_fields)
                 except TypeError:
-                    # update_fields=None would error; fall back to normal save
                     prospect.save()
 
-            # Optionally append a running note entry if provided
             subj = (note_form.cleaned_data.get("subject") or "").strip()
             body = (note_form.cleaned_data.get("body_md") or "").strip()
             pinned = bool(note_form.cleaned_data.get("is_pinned"))

@@ -39,7 +39,31 @@
                 <th>Created By</th>
                 <td>{{ prospect.created_by|user_name|default:"—" }}</td>
             </tr>
+            {% if prospect.address1 %}
+                <th>Contact Address:</th>
+                <td>
+                    <address>
+                        {{prospect.address1}} <br>
+                        {{prospect.address2}} <br>
+                        {{prospect.city}}, {{prospect.state}} {{prospect.postal_code}}
+                    </address>
+                </td>
+            {% endif %}
+            <tr>
+                <th>Website:</th>
+                {% if prospect.website_url %}
+                    <td>{{prospect.website_url}}</td>
+                {% else%}
+                    <td>TBD</td>
+                {% endif %}
+            </tr>
         </table>
+        <div class="notes">
+            {% for n in notes %}
+                <h3>{{n.subject}} {{n.created_by}} @{{n.created_at}}</h3>
+                <p>{{n.body_md}}</p>
+            {% endfor %}
+        </div>
     </div>
 
 {% endblock content %}

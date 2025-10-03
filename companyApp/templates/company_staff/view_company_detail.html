@@ -11,6 +11,10 @@
     <h2><a href="{% url 'userApp:employee_home' %}">Dashboard</a></h2>
     <h2><a href="{% url 'company_staff:company_home' %}">Company Admin</a></h2>
 </div>
+<div class="mini_menu">
+    <h2><a href="{% url 'company_staff:edit_company_detail' company.pk %}">Update Company</a></h2>
+    <h2><a href="#">Add Contact</a></h2>
+</div>
 <div class="info">
   <h3>Company Information:</h3>
   <table class="entry">

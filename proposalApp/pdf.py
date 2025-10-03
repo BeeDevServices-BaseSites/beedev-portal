@@ -13,7 +13,6 @@ def generate_proposal_pdf(proposal: Proposal, *, request: Optional[HttpRequest] 
     if proposal.pdf and not force:
         return proposal
 
-    # gather items (ordered)
     items = list(
         ProposalLineItem.objects
         .filter(proposal=proposal)
@@ -27,7 +26,6 @@ def generate_proposal_pdf(proposal: Proposal, *, request: Optional[HttpRequest] 
         request=request,
     )
 
-    # Render to bytes
     pdf_bytes = HTML(string=html, base_url=base_url).write_pdf()
 
     if proposal.pdf:
@@ -43,7 +41,6 @@ def generate_proposal_pdf(proposal: Proposal, *, request: Optional[HttpRequest] 
             proposal.save(update_fields=["pdf"])
         return proposal
 
-    # Save to FileField; upload_to will place it under the proposals/… path
     filename = f"proposal-{proposal.pk or 'new'}.pdf"
     proposal.pdf.save(filename, ContentFile(pdf_bytes), save=True)
     return proposal

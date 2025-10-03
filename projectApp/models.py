@@ -79,7 +79,6 @@ class Project(models.Model):
         validators=[MinValueValidator(1), MaxValueValidator(9)],
         help_text="Project urgency (1=highest, 9=lowest)."
     )
-    # Whether clients can see the project's numeric priority on client views.
     show_priority_to_client = models.BooleanField(default=False)
 
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="projects_created")
@@ -139,7 +138,6 @@ class ProjectTask(models.Model):
     title     = models.CharField(max_length=240)
     description = models.TextField(blank=True)
 
-    # Independent, numeric task priority (1 = highest)
     priority  = models.PositiveSmallIntegerField(
         default=3,
         validators=[MinValueValidator(1), MaxValueValidator(9)],
@@ -148,14 +146,12 @@ class ProjectTask(models.Model):
 
     status    = models.CharField(max_length=16, choices=Status.choices, default=Status.TODO)
 
-    # Dates & weekly planning
     due_date          = models.DateField(null=True, blank=True)
     planned_week_start = models.DateField(
         null=True, blank=True,
         help_text="Week start (e.g. Monday) this task is planned for."
     )
 
-    # Assignment (keep simple: assign to users on the project)
     assignees = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         blank=True,
@@ -163,12 +159,10 @@ class ProjectTask(models.Model):
         help_text="Team members responsible for this task."
     )
 
-    # Progress & ordering
     estimated_hours   = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("0.00"))
     percent_complete  = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"))
     sort_order        = models.PositiveIntegerField(default=0)
 
-    # Client visibility controls
     is_client_visible        = models.BooleanField(
         default=True,
         help_text="If false, clients cannot see this task at all."
@@ -178,7 +172,6 @@ class ProjectTask(models.Model):
         help_text="If true AND task is visible, clients can see the task's priority number."
     )
 
-    # Audit
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
         on_delete=models.SET_NULL, related_name="project_tasks_created"
@@ -190,7 +183,7 @@ class ProjectTask(models.Model):
         ordering = (
             "project",
             "planned_week_start",
-            "priority",     # lower numbers first
+            "priority",
             "sort_order",
             "due_date",
             "pk",
@@ -318,10 +311,6 @@ class ProjectLink(models.Model):
         return f"{self.project.slug}: {self.label}"
 
 class ProjectViewer(models.Model):
-    """
-    Extra allow-list of users who may view this project (per-project override).
-    Useful when not every company member should see this project.
-    """
     project = models.ForeignKey("projectApp.Project", on_delete=models.CASCADE, related_name="viewers")
     user    = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="projects_visible")
 
@@ -343,7 +332,6 @@ class ProjectWeekNote(models.Model):
     week_start = models.DateField(help_text="Normalized to week start (e.g., Monday).")
     body      = models.TextField(blank=True)
 
-    # Visibility mirrors ProjectUpdate style
     class Visibility(models.TextChoices):
         INTERNAL = "INTERNAL", "Internal (staff only)"
         SHARED   = "SHARED",   "Shared with client"

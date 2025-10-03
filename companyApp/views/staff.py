@@ -3,14 +3,16 @@ from django.core.exceptions import PermissionDenied
 from django.views.generic import TemplateView
 from django.shortcuts import render, get_object_or_404, redirect
 from ..models import Company, CompanyContact, CompanyLink
-from ..forms import CompanyForm
+from ..forms import CompanyForm, CompanyEditForm
 from prospectApp.models import Prospect
 from proposalApp.models import ProposalDraft, DraftItem, Proposal, ProposalEvent
+from userApp.models import User
 from core.utils.context import base_ctx
 from django.core.paginator import Paginator
 from django.db.models import Prefetch, Count, Sum, Q
 from django.contrib import messages
 from django.http import JsonResponse, Http404
+from django.urls import reverse
 
 def ajax_primary_contact(request, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff:
@@ -21,12 +23,14 @@ def ajax_primary_contact(request, pk: int):
         "email": (c.primary_email or "").strip().lower(),
     })
 
+def _allowed_staff(u: User) -> bool:
+    return u.is_active and u.role in {User.Roles.EMPLOYEE, User.Roles.ADMIN, User.Roles.OWNER}
+
 
 @login_required
 def company_home(request):
     user = request.user
-    allowed_roles = {user.Roles.EMPLOYEE, user.Roles.ADMIN, user.Roles.OWNER}
-    if getattr(user, "role", None) not in allowed_roles:
+    if not _allowed_staff(request.user):
         raise PermissionDenied("Not allowed")
     
     companies = Company.objects.all()
@@ -41,8 +45,7 @@ def company_home(request):
 @login_required
 def view_all_companies(request):
     user = request.user
-    allowed_roles = {user.Roles.EMPLOYEE, user.Roles.ADMIN, user.Roles.OWNER}
-    if getattr(user, "role", None) not in allowed_roles:
+    if not _allowed_staff(request.user):
         raise PermissionDenied("Not allowed")
     
     q = (request.GET.get("q") or "").strip()
@@ -63,9 +66,9 @@ def view_all_companies(request):
 @login_required
 def view_company_detail(request, pk: int):
     user = request.user
-    allowed_roles = {user.Roles.EMPLOYEE, user.Roles.ADMIN, user.Roles.OWNER, user.Roles.HR}
-    if getattr(user, "role", None) not in allowed_roles:
+    if not _allowed_staff(request.user):
         raise PermissionDenied("Not allowed")
+    
     company = get_object_or_404(Company, pk=pk)
     contacts = CompanyContact.objects.filter(company=company).order_by("name")
     links = CompanyLink.objects.filter(company=company).order_by("id")
@@ -87,8 +90,7 @@ def view_company_detail(request, pk: int):
 @login_required
 def add_company(request):
     user = request.user
-    allowed_roles = {user.Roles.EMPLOYEE, user.Roles.ADMIN, user.Roles.OWNER}
-    if getattr(user, "role", None) not in allowed_roles:
+    if not _allowed_staff(request.user):
         raise PermissionDenied("Not allowed")
     
     if request.method == "POST":
@@ -110,3 +112,28 @@ def add_company(request):
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title
     return render(request, "company_staff/add_company_form.html", ctx)
+
+@login_required
+def edit_company(request, pk: int):
+    if not _allowed_staff(request.user):
+        raise PermissionDenied("Not allowed")
+    
+    company = get_object_or_404(Company, pk=pk)
+
+    if request.method == "POST":
+        form = CompanyEditForm(request.POST, instance=company)
+        if form.is_valid():
+            obj = form.save(commit=False)
+            if hasattr(obj, "contact_email") and obj.contact_email:
+                obj.contact_email = obj.contact_email.strip().lower()
+            obj.save()
+            messages.success(request, "Company updated.")
+            return redirect(reverse("company_staff:company_detail", args=[company.pk]))
+    else:
+        form = CompanyEditForm(instance=company)
+    
+    title = f"Update {company.name}"
+    ctx = {"user_obj": request.user, "form": form, "company": company,}
+    ctx.update(base_ctx(request, title=title))
+    ctx["page_heading"] = title
+    return render(request, "company_staff/company_edit.html", ctx)

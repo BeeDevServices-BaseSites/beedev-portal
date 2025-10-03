@@ -46,7 +46,6 @@ INSTALLED_APPS = [
     'prospectApp.apps.ProspectappConfig',
     'announceApp.apps.AnnounceappConfig',
     'core.apps.CoreConfig',
-    # Only load browser reload in dev (optional but recommended)
     *(['django_browser_reload'] if env.bool('DEBUG', default=False) else []),
 ]
 
@@ -59,13 +58,11 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    # only in dev
     *( ['django_browser_reload.middleware.BrowserReloadMiddleware'] if env.bool('DEBUG', default=False) else [] ),
 ]
 
 ROOT_URLCONF = 'portal.urls'
 
-# -------- Templates: allow project-level overrides (admin/login.html etc.) --------
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -87,16 +84,8 @@ TEMPLATES = [
 WSGI_APPLICATION = 'portal.wsgi.application'
 
 
-# Database
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
-#     }
-# }
 DATABASES = {
     'default': {
-        # 'ENGINE': 'mysql.connector.django',
         'ENGINE': 'django.db.backends.mysql',
         'NAME': env('DB_NAME'),
         'USER': env('DB_USER'),

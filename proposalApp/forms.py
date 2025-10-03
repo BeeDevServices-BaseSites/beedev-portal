@@ -36,20 +36,18 @@ class DraftForm(forms.ModelForm):
         self.fields["discount"].queryset = Discount.objects.filter(is_active=True)
         self.fields["discount"].required = False
         if not self.instance.pk:
-            self.fields["currency"].initial = "USD"  # default when creating
+            self.fields["currency"].initial = "USD"
 
     def clean(self):
         cleaned = super().clean()
         company = cleaned.get("company")
         title = (cleaned.get("title") or "").strip()
 
-        # Gates
         if not company:
             self.add_error("company", "Select a company.")
         if not title:
             self.add_error("title", "Enter a title.")
 
-        # Auto-fill contact from company if left blank (works for create & edit)
         if company:
             if not cleaned.get("contact_name"):
                 cleaned["contact_name"] = company.primary_contact_name or ""
@@ -58,7 +56,6 @@ class DraftForm(forms.ModelForm):
 
         return cleaned
 
-# Backward compatibility with your existing import/name
 NewDraftForm = DraftForm
 
 
@@ -76,7 +73,7 @@ class DraftNoteForm(forms.Form):
 
 DraftNoteFormSet = formset_factory(
     DraftNoteForm,
-    extra=1,          # starts with one; your JS “Add section” appends more using empty_form
+    extra=1,
     can_delete=True,
 )
 
@@ -88,7 +85,7 @@ DraftNoteInlineFormSet = inlineformset_factory(
     parent_model=ProposalDraft,
     model=DraftNote,
     fields=["subject", "body_md", "sort_order"],
-    extra=0,          # load exactly what exists; JS can append from empty_form
+    extra=0,
     can_delete=True,
     widgets={
         "body_md": forms.Textarea(attrs={"rows": 4}),

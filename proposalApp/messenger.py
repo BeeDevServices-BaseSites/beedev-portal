@@ -3,11 +3,6 @@ from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 
 def send_proposal(proposal, recipient_emails, signing_url, subject=None, body_text=None, **kwargs):
-    """
-    Called by Proposal.mark_sent().
-    - recipient_emails: list[str]
-    - signing_url: absolute URL to public view (already built)
-    """
     if not recipient_emails:
         return
 

@@ -1,32 +1,3 @@
-"""
-Reference views for BeeDev Portal.
-Copy-paste into any app and tweak. Do not include in urls directly.
-
-IMPORT CHEAT SHEET:
-───────────────────────────────
-If your app has a flat structure:
-    userApp/
-      views.py
-      forms.py
-      models.py
-
-    → use:
-        from .forms import SomeForm
-        from .models import SomeModel
-
-If your app has a foldered views structure:
-    userApp/
-      views/
-        __init__.py
-        root.py
-      forms.py
-      models.py
-
-    → use:
-        from ..forms import SomeForm
-        from ..models import SomeModel
-"""
-
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.views.generic import TemplateView

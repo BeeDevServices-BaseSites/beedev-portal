@@ -85,20 +85,11 @@ class Prospect(TimeStamped):
 
     @transaction.atomic
     def convert_to_company(self, *, actor=None, update_if_exists=True):
-        """
-        Create (or update) a Company from this Prospect.
-        - Copies primary contact name/email into Company.
-        - Creates a CompanyContact (primary) if an email exists.
-        Returns the Company.
-        """
-
-        # Company name (fall back across common prospect fields)
         company_name = _coalesce(
             getattr(self, "company_name", None),
             getattr(self, "name", None),
         ) or "Unnamed Company"
 
-        # Contact name
         contact_name = _coalesce(
             getattr(self, "primary_contact_name", None),
             getattr(self, "contact_name", None),
@@ -106,7 +97,6 @@ class Prospect(TimeStamped):
             f"{getattr(self, 'first_name', '')} {getattr(self, 'last_name', '')}",
         )
 
-        # Contact email (lowercased)
         contact_email = _coalesce(
             getattr(self, "primary_email", None),
             getattr(self, "contact_email", None),
@@ -159,9 +149,6 @@ class Prospect(TimeStamped):
         return company
     
 class ProspectNote(models.Model):
-    """
-    Running notes log attached to a Prospect (does not overwrite Prospect.notes).
-    """
     prospect    = models.ForeignKey(Prospect, on_delete=models.CASCADE, related_name="notes_log")
     subject     = models.CharField(max_length=160, blank=True)
     body_md     = models.TextField(blank=True)

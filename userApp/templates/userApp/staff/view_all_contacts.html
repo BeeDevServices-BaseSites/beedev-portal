@@ -42,7 +42,7 @@
             </tr>
             {% for w in won %}
                 <tr>
-                    <td><a href="#">{{w.full_name}}</a></td>
+                    <td><a href="{% url 'prospects:view_one_prospect' w.pk %}">{{w.full_name}}</a></td>
                     <td>{{w.company_name}}</td>
                     <td>{{w.status}}</td>
                 </tr>
@@ -84,7 +84,7 @@
             </tr>
             {% for d in dnc %}
                 <tr>
-                    <td><a href="#">{{d.full_name}}</a></td>
+                    <td><a href="{% url 'prospects:view_one_prospect' d.pk %}">{{d.full_name}}</a></td>
                     <td>{{d.company_name}}</td>
                     <td>{{d.status}}</td>
                 </tr>

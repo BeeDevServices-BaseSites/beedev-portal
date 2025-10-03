@@ -14,7 +14,6 @@ def _first_present(model, candidates):
 class ProspectForm(forms.ModelForm):
     class Meta:
         model = Prospect
-        # Adjust this list to your model’s real fields
         fields = [
             "full_name", "email", "phone",
             "company_name", "status", "notes"
@@ -28,10 +27,6 @@ class ProspectForm(forms.ModelForm):
         return email.lower()
 
 class ProspectEditForm(ModelForm):
-    """
-    General info edit (company/contact/notes/etc.).
-    Tries to include sensible fields if they exist on your Prospect model.
-    """
     new_note_subject = forms.CharField(max_length=160, required=False, label="Add note — subject")
     new_note_body_md = forms.CharField(
         required=False,
@@ -41,17 +36,12 @@ class ProspectEditForm(ModelForm):
     class Meta:
         model = Prospect
         fields = [
-            # your existing core fields...
-            "company_name",   # or "name" if that’s what you use
+            "company_name",
             "full_name",
             "email",
             "phone",
-
-            # new/confirmed fields
             "website_url",
             "address1", "address2", "city", "state", "postal_code", "country",
-
-            # keep the summary notes here too
             "notes",
         ]
         widgets = {
@@ -63,9 +53,6 @@ class ProspectEditForm(ModelForm):
         return email
 
 class ProspectStatusForm(ModelForm):
-    """
-    Status-only form (e.g., NEW/ACTIVE/WON/LOST/etc.).
-    """
     new_note_subject = forms.CharField(max_length=160, required=False, label="Add note — subject")
     new_note_body_md = forms.CharField(
         required=False,
@@ -78,7 +65,7 @@ class ProspectStatusForm(ModelForm):
             "status",
             "last_contacted_at",
             "next_follow_up_at",
-            "notes",   # keep your summary/overview notes here
+            "notes",
         ]
         widgets = {
             "last_contacted_at": forms.DateInput(attrs={"type": "date"}),
@@ -88,7 +75,6 @@ class ProspectStatusForm(ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-        # You can add per-status validation here if needed
         return cleaned
     
 class ProspectNoteQuickForm(forms.Form):

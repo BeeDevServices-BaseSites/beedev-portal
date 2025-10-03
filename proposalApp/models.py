@@ -1,5 +1,5 @@
 # proposalApp/models.py
-import os, uuid
+import os, uuid, datetime
 from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 import secrets
@@ -27,10 +27,6 @@ def validate_proposal_pdf_size(f):
         raise ValidationError(f"PDF too large (>{MAX_PROPOSAL_PDF_BYTES//1024//1024}MB).")
 
 def proposal_pdf_upload_to(instance, filename):
-    """
-    media/proposals/YYYY/MM/<company-or-proposal>-<uuid>.pdf
-    Avoids relying on PK and tolerates any original extension.
-    """
     today = datetime.date.today()
     ext = os.path.splitext(filename)[1].lower()
     ext = ".pdf" if ext != ".pdf" else ext
@@ -157,19 +153,16 @@ class ProposalDraft(models.Model):
     contact_name = models.CharField(max_length=160, blank=True)
     contact_email = models.EmailField(blank=True)
 
-    # Totals
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     discount = models.ForeignKey(Discount, null=True, blank=True, on_delete=models.SET_NULL)
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
 
-    # Deposit
     deposit_type  = models.CharField(max_length=10, choices=DepositType.choices, default=DepositType.NONE)
     deposit_value = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     deposit_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     remaining_due = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
 
-    # Estimate / Tiering
     estimate_tier = models.ForeignKey("CostTier", null=True, blank=True, on_delete=models.SET_NULL, related_name="drafts")
     estimate_low = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     estimate_high = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
@@ -179,7 +172,6 @@ class ProposalDraft(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # Narrative (for PDF)
     valid_until       = models.DateField(null=True, blank=True)
     summary_md        = models.TextField(blank=True)
     included_md       = models.TextField(blank=True)
@@ -198,12 +190,7 @@ class ProposalDraft(models.Model):
     class Meta:
         ordering = ("-created_at",)
     
-    # --- Autofill helpers ---
     def autofill_contact_from_company(self, *, force: bool = False) -> None:
-        """
-        Copy company.primary_contact_name/email into the draft's contact fields.
-        If force=False, only fill blanks. If force=True, overwrite whatever is there.
-        """
         if not self.company_id:
             return
         c = self.company
@@ -212,9 +199,7 @@ class ProposalDraft(models.Model):
         if force or not (self.contact_email or "").strip():
             self.contact_email = (c.primary_email or "").strip()
 
-    # --- persistence override ---
     def save(self, *args, **kwargs):
-        # On initial create, prefill from company if blank
         if not self.pk:
             self.autofill_contact_from_company(force=False)
         super().save(*args, **kwargs)
@@ -251,12 +236,7 @@ class ProposalDraft(models.Model):
     def __str__(self):
         return f"Draft: {self.company.name} · {self.title}"
 
-    # --- Core math ---
     def compute_line_total(self, *, hours, qty, job_rate: "JobRate", base_setting: "BaseSetting") -> Decimal:
-        """
-        Formula:
-        line_total = (hours_to_complete * number_of_items * job_hourly_rate) + base_rate
-        """
         hours = Decimal(hours or 0)
         qty   = Decimal(qty or 0)
         hr    = Decimal(job_rate.hourly_rate if job_rate else 0)
@@ -278,10 +258,6 @@ class ProposalDraft(models.Model):
         return Decimal("0.00")
     
     def update_estimate_from_tiers(self, *, use_total=True, save=True):
-        """
-        If estimate_manual is True, keep the selected estimate_tier and just
-        refresh estimate_low/high from it. Otherwise, auto-pick the tier from totals.
-        """
         amount = self.total if use_total else self.subtotal
 
         if self.estimate_manual and self.estimate_tier_id:
@@ -322,10 +298,6 @@ class ProposalDraft(models.Model):
 
     @transaction.atomic
     def convert_to_proposal(self, *, actor=None):
-        """
-        Create a Proposal snapshot (final) from this Draft for sending/signing.
-        Fully compatible with invoiceApp.Invoice.from_proposal().
-        """
         snap_name  = (self.contact_name or "").strip() or (self.company.primary_contact_name or "")
         snap_email = (self.contact_email or "").strip() or (self.company.primary_email or "")
 
@@ -390,9 +362,6 @@ class ProposalDraft(models.Model):
     
     @property
     def valid_until_effective(self):
-        """
-        If valid_until isn’t set, default to created_at + 30 days (date only).
-        """
         base = self.created_at or timezone.now()
         return (self.valid_until or (base + timedelta(days=30))).date()
 
@@ -409,11 +378,6 @@ class DraftNote(models.Model):
         return f"{self.draft} · {self.subject}"
 
 class DraftItem(models.Model):
-    """
-    A chosen item inside a draft. Staff picks a CatalogItem (bundled job rate + base fee),
-    then only adjust hours and quantity. Name/description/job_rate/base_setting are snapshotted
-    from the catalog for transparency and stability.
-    """
     draft = models.ForeignKey(ProposalDraft, on_delete=models.CASCADE, related_name="items")
 
     catalog_item = models.ForeignKey(
@@ -432,7 +396,6 @@ class DraftItem(models.Model):
     hours    = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("1.00"))
     quantity = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("1.00"))
 
-    # Computed
     line_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     sort_order = models.PositiveIntegerField(default=0)
 
@@ -442,13 +405,7 @@ class DraftItem(models.Model):
     def __str__(self):
         return f"{self.name} · {self.draft}"
 
-    # ----- internal helpers -----
     def _apply_catalog(self):
-        """
-        Keep the bundled parts in sync with the chosen catalog item.
-        Name/description/rate/base are always snapshotted from the catalog.
-        Hours/quantity defaults are applied only on initial create.
-        """
         c = self.catalog_item
         if not c:
             return
@@ -457,21 +414,17 @@ class DraftItem(models.Model):
         self.job_rate = c.job_rate
         self.base_setting = c.base_setting
 
-    # ----- persistence -----
     def save(self, *args, **kwargs):
         creating = not bool(self.pk)
 
-        # 1) snapshot from catalog (name/desc/rate/base)
         self._apply_catalog()
 
-        # 2) on create, if hours/quantity look like defaults, use catalog defaults
         if creating:
             if (self.hours is None) or (self.hours == Decimal("0.00")) or (self.hours == Decimal("1.00")):
                 self.hours = self.catalog_item.default_hours
             if (self.quantity is None) or (self.quantity == Decimal("0.00")) or (self.quantity == Decimal("1.00")):
                 self.quantity = self.catalog_item.default_quantity
 
-        # 3) compute by formula: (hours * qty * job_rate.hourly_rate) + base_setting.base_rate
         self.line_total = self.draft.compute_line_total(
             hours=self.hours,
             qty=self.quantity,
@@ -481,7 +434,6 @@ class DraftItem(models.Model):
 
         super().save(*args, **kwargs)
 
-        # 4) refresh draft totals
         self.draft.recalc_totals(save=True)
 
 
@@ -493,7 +445,6 @@ def _signing_base() -> str:
     return getattr(settings, "PROPOSAL_SIGNING_URL_BASE", "").rstrip("/")
 
 class Proposal(models.Model):
-    """Final proposal artifact with signing, recipients, events, and invoice linkage."""
     company     = models.ForeignKey("companyApp.Company", on_delete=models.CASCADE, related_name="simple_proposals")
     created_by  = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
 
@@ -522,16 +473,13 @@ class Proposal(models.Model):
 
     pdf = models.FileField(upload_to=proposal_pdf_upload_to, null=True, blank=True, validators=[FileExtensionValidator(ALLOWED_PROPOSAL_PDF_EXTS), validate_proposal_pdf_size], help_text="Upload a finalized PDF; optional if you generate on the fly.")
 
-    # Signing fields
     sign_token       = models.CharField(max_length=64, unique=True, blank=True)
     token_expires_at = models.DateTimeField(null=True, blank=True)
 
-    # Lifecycle stamps
     sent_at    = models.DateTimeField(null=True, blank=True)
     viewed_at  = models.DateTimeField(null=True, blank=True)
     signed_at  = models.DateTimeField(null=True, blank=True)
 
-    # --- Approver / countersign tracking ---
     approver_user = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
         on_delete=models.SET_NULL, related_name="proposals_to_countersign",
@@ -557,7 +505,6 @@ class Proposal(models.Model):
     def __str__(self):
         return f"{self.company.name} · {self.title}"
 
-    # ---- Signing / lifecycle helpers ----
     def ensure_signing_link(self, *, hours_valid: int = 336):  # default 14 days
         if not self.sign_token:
             self.sign_token = secrets.token_urlsafe(32)  # ~43 chars, fits in 64
@@ -574,19 +521,14 @@ class Proposal(models.Model):
         return f"{base}/{self.sign_token}" if base else self.sign_token
 
     def mark_sent(self, *, actor=None, messenger_kwargs: dict | None = None):
-        """
-        Record sent_at + event; optional messenger hook via settings.PROPOSAL_MESSENGER.
-        """
         self.ensure_signing_link()
         if not self.sent_at:
             self.sent_at = timezone.now()
         self.save(update_fields=["sent_at", "updated_at"])
 
-        # messenger hook (optional)
         hook_path = getattr(settings, "PROPOSAL_MESSENGER", "")
         if hook_path:
             try:
-                # Lazily resolve to avoid import cycles
                 if ":" in hook_path:
                     mod_path, fn_name = hook_path.split(":", 1)
                 else:
@@ -617,15 +559,10 @@ class Proposal(models.Model):
         return first
 
     def mark_signed(self, *, actor=None, ip=None, signature_payload=None, due_date=None, customer_user=None):
-        """
-        Called when client signs via the (future) signing page.
-        Also creates the deposit invoice immediately via invoiceApp.Invoice.from_proposal().
-        """
         if not self.signed_at:
             self.signed_at = timezone.now()
             self.save(update_fields=["signed_at", "updated_at"])
 
-        # Create the deposit invoice (real invoice model)
         self.create_deposit_invoice(actor=actor, due_date=due_date, customer_user=customer_user)
 
         ProposalEvent.objects.create(
@@ -635,11 +572,7 @@ class Proposal(models.Model):
         return self.signed_at
 
     def create_deposit_invoice(self, *, actor=None, due_date=None, customer_user=None):
-        """
-        Uses invoiceApp.Invoice.from_proposal() to create an invoice for this proposal.
-        The Invoice factory copies line items & applied discounts and snapshots minimum_due.
-        """
-        from invoiceApp.models import Invoice  # local import to avoid circulars
+        from invoiceApp.models import Invoice
 
         inv = Invoice.from_proposal(
             self,
@@ -647,9 +580,6 @@ class Proposal(models.Model):
             due_date=due_date,
             customer_user=customer_user,
         )
-        # If you want to ensure 'minimum_due' equals deposit explicitly, you can:
-        # inv.minimum_due = self.deposit_amount or Decimal("0.00")
-        # inv.save(update_fields=["minimum_due", "updated_at"])
         return inv
     
     @property
@@ -666,23 +596,13 @@ class Proposal(models.Model):
             self.save(update_fields=["countersigned_at", "countersigned_by", "countersign_notes", "updated_at"])
     
     def create_project(self, *, actor=None, manager=None, kickoff_today=False, name=None):
-        """
-        Materialize a Project from this signed proposal.
-        - Ensures (company, name) is unique
-        - Defaults manager to approver/creator if they’re staff
-        - Optionally sets start_date to today
-        Returns the created Project (or the first existing one if already linked).
-        """
-        # Local import avoids circulars
         from projectApp.models import Project
         from django.utils import timezone
 
-        # If you’ve already made one for this proposal, just return it
         existing = getattr(self, "projects", None)
         if existing and existing.exists():
             return existing.order_by("pk").first()
 
-        # Pick a default manager: approver → created_by → actor (only if staff)
         mgr = manager or getattr(self, "approver_user", None) or getattr(self, "created_by", None) or actor
         if not (getattr(mgr, "is_staff", False) or getattr(mgr, "is_superuser", False)):
             mgr = None
@@ -716,14 +636,12 @@ class ProposalLineItem(models.Model):
     name         = models.CharField(max_length=160)
     description  = models.TextField(blank=True)
 
-    # Draft math (kept for transparency)
     hours        = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("1.00"))
     quantity     = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("1.00"))
     job_rate     = models.ForeignKey(JobRate, on_delete=models.PROTECT, related_name="proposal_items")
     base_setting = models.ForeignKey(BaseSetting, on_delete=models.PROTECT, related_name="proposal_items")
     line_total   = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
 
-    # Invoice-compat fields expected by invoiceApp.Invoice.from_proposal()
     unit_price   = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     subtotal     = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
 
@@ -746,9 +664,6 @@ class ProposalSection(models.Model):
         return f"{self.proposal} · {self.subject}"
 
 class ProposalAppliedDiscount(models.Model):
-    """
-    Snapshot of discounts applied on a proposal so invoiceApp can copy them.
-    """
     proposal       = models.ForeignKey(Proposal, on_delete=models.CASCADE, related_name="applied_discounts")
     discount_code  = models.SlugField(max_length=40)
     name           = models.CharField(max_length=120)

@@ -18,3 +18,12 @@ class CompanyForm(forms.ModelForm):
     def clean_email(self):
         email = self.cleaned_data.get("primary_email", "").strip()
         return email.lower()
+    
+class CompanyEditForm(forms.ModelForm):
+    class Meta:
+        model = Company
+        fields = ["name", "primary_contact_name", "primary_email", "phone", "website", "status", "pipeline_status", "notes"]
+
+    def clean_email(self):
+        email = self.cleaned_data.get("primary_email", "").strip()
+        return email.lower()

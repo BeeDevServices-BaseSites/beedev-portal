@@ -6,7 +6,7 @@
 - Change status of Prospect to include updating to a won which will then convert the prospect to not a client but a company
 - Add Company
 - Contacts Admin page 
-    - View Prospective clients (all status but won lost or dnc) and can view their page and update and edit
+    - View Prospective clients (all status but won lost or dnc) and can view their page and update and edit ** need to make sure that when adding a note in new section on update details that it saves to the prospectNote table right now it is not saving anywhere.
     - View won Prospects - these are now companies but not a user based client so still in proposal step
     - View current clients - These have accounts in system
     - View DNC clients

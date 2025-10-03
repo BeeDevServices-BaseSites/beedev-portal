@@ -22,8 +22,8 @@ def _is_owner(user):
 def _is_admin(user):
     return user.is_active and user.role == User.Roles.ADMIN
 
-def _is_employee(user):
-    return user.is_active and (user.role in [User.Roles.EMPLOYEE, User.Roles.ADMIN, User.Roles.OWNER])
+def _allowed_management(u: User) -> bool:
+    return u.is_active and u.role in {User.Roles.ADMIN, User.Roles.OWNER}
 
 def _allowed_staff(user):
     return user.is_active and user.role in {
@@ -33,9 +33,9 @@ def _allowed_staff(user):
 @login_required
 def proposal_home(request):
     user = request.user
-    allowed_roles = {user.Roles.EMPLOYEE, user.Roles.ADMIN, user.Roles.OWNER}
-    if getattr(user, "role", None) not in allowed_roles:
+    if not _allowed_staff(request.user):
         raise PermissionDenied("Not allowed")
+    
     drafts = ProposalDraft.objects.exclude(approval_status='CONVERTED')
 
     proposals_qs = (
@@ -86,7 +86,6 @@ def create_new_draft(request):
             currency = form.cleaned_data["currency"].strip()
             discount = form.cleaned_data.get("discount")
 
-            # Auto-fill (and normalize) contact if left blank
             contact_name  = (form.cleaned_data.get("contact_name")  or company.primary_contact_name or "").strip()
             contact_email = (form.cleaned_data.get("contact_email") or company.primary_email        or "").strip().lower()
 
@@ -101,13 +100,11 @@ def create_new_draft(request):
                     contact_email=contact_email,
                 )
 
-                # Selected catalog items -> DraftItem rows
                 for ci in catalog_qs:
                     if request.POST.get(f"item-{ci.id}-checked") == "on":
                         hours_raw = request.POST.get(f"item-{ci.id}-hours") or ci.default_hours
                         qty_raw   = request.POST.get(f"item-{ci.id}-qty")   or ci.default_quantity
 
-                        # sanitize
                         try:
                             hours = Decimal(str(hours_raw))
                             if hours < 0: hours = ci.default_hours
@@ -126,7 +123,6 @@ def create_new_draft(request):
                             quantity=qty,
                         )
 
-                # Notes formset
                 sort = 0
                 for nf in notes_fs:
                     if notes_fs.can_delete and nf.cleaned_data.get("DELETE"):
@@ -142,21 +138,17 @@ def create_new_draft(request):
                         )
                         sort += 1
 
-                # Optional: if you removed recalc from DraftItem.save(), keep this.
-                # Otherwise it's safe to omit (avoids double work).
                 draft.recalc_totals(save=True)
 
             messages.success(request, "Draft created.")
             return redirect(reverse("proposal_staff:draft_detail", args=[draft.id]))
 
-        # invalid -> re-render
         title = "Create Draft"
         ctx = {"form": form, "notes_fs": notes_fs, "catalog_items": catalog_qs}
         ctx.update(base_ctx(request, title=title))
         ctx["page_heading"] = title
         return render(request, "proposal_staff/create_new_draft.html", ctx)
 
-    # GET
     form = NewDraftForm()
     notes_fs = NoteFormSet(prefix="notes")
     title = "Create Draft"
@@ -169,8 +161,7 @@ def create_new_draft(request):
 @login_required
 def view_draft_detail(request, pk: int):
     user = request.user
-    allowed_roles = {user.Roles.EMPLOYEE, user.Roles.ADMIN, user.Roles.OWNER}
-    if getattr(user, "role", None) not in allowed_roles:
+    if not _allowed_staff(user):
         raise PermissionDenied("Not allowed")
     
     draft = (
@@ -258,8 +249,7 @@ def view_draft_detail(request, pk: int):
 @login_required
 def view_proposal_detail(request, pk: int):
     user = request.user
-    allowed_roles = {user.Roles.EMPLOYEE, user.Roles.ADMIN, user.Roles.OWNER}
-    if getattr(user, "role", None) not in allowed_roles:
+    if not _allowed_staff(user):
         raise PermissionDenied("Not allowed")
     
     proposal = (
@@ -313,7 +303,6 @@ def generate_proposal_pdf_view(request, pk: int):
 
     proposal = get_object_or_404(Proposal.objects.select_related("company"), pk=pk)
 
-    # Render/overwrite PDF (clean dev behavior)
     base_url = request.build_absolute_uri("/")
     generate_proposal_pdf(proposal, request=request, base_url=base_url, force=True)
     messages.success(request, "PDF generated.")
@@ -331,17 +320,15 @@ def view_proposal_pdf(request, pk: int):
         messages.info(request, "No PDF has been generated yet.")
         return redirect(reverse("proposal_staff:proposal_detail", args=[proposal.id]))
 
-    # Stream the PDF inline
     f = proposal.pdf.open("rb")
     resp = FileResponse(f, content_type="application/pdf")
-    # Show in-browser (inline) with a readable filename
     resp["Content-Disposition"] = f'inline; filename="{proposal.company.slug or "proposal"}-{proposal.pk}.pdf"'
     return resp
 
 @login_required
 def send_proposal(request, pk: int):
     user = request.user
-    if not (user.is_active and (user.is_superuser or user.role in [User.Roles.ADMIN, User.Roles.OWNER, User.Roles.EMPLOYEE])):
+    if not _allowed_staff(user):
         raise PermissionDenied("Not allowed")
 
     proposal = get_object_or_404(Proposal, pk=pk)
@@ -357,14 +344,12 @@ def send_proposal(request, pk: int):
             messages.error(request, "No valid emails found.")
             return redirect(reverse("proposal_staff:proposal_detail", args=[proposal.pk]))
 
-        # Upsert recipients
         created = 0
         for em in emails:
             obj, was_created = ProposalRecipient.objects.get_or_create(proposal=proposal, email=em, defaults={"is_primary": True})
             if was_created:
                 created += 1
 
-        # This will generate/refresh the token + fire your messenger hook
         proposal.mark_sent(actor=user)
 
         messages.success(request, f"Queued send to {len(emails)} recipient(s). (Added {created} new)")
