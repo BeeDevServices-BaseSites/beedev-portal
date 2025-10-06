@@ -12,9 +12,10 @@ from django.contrib import messages
 from django.urls import reverse
 from proposalApp.pdf import generate_proposal_pdf
 from django.http import FileResponse, HttpResponseNotAllowed
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.forms import formset_factory
-from ..forms import NewDraftForm, DraftNoteForm
+from ..forms import NewDraftForm, DraftForm, DraftNoteForm, DraftNoteInlineFormSet, DraftItemInlineFormSet
+from django.utils.safestring import mark_safe
 
 def _is_owner(user):
     return user.is_active and (user.is_superuser or user.role == User.Roles.OWNER)
@@ -29,6 +30,31 @@ def _allowed_staff(user):
     return user.is_active and user.role in {
         User.Roles.EMPLOYEE, User.Roles.ADMIN, User.Roles.OWNER
     }
+
+def _dec_or(default, raw):
+    if raw is None or str(raw).strip() == "":
+        return Decimal(str(default))
+    try:
+        d = Decimal(str(raw))
+        if d < 0:
+            return Decimal(str(default))
+        return d
+    except (InvalidOperation, ValueError):
+        return Decimal(str(default))
+
+try:
+    import markdown  # pip install markdown
+    def render_md(text: str):
+        return mark_safe(markdown.markdown(
+            text or "",
+            extensions=["extra", "sane_lists", "tables", "fenced_code"]
+        ))
+except Exception:
+    # Fallback if markdown isn't installed yet
+    from django.utils.html import escape
+    from django.template.defaultfilters import linebreaksbr
+    def render_md(text: str):
+        return mark_safe(linebreaksbr(escape(text or "")))
 
 @login_required
 def proposal_home(request):
@@ -157,7 +183,6 @@ def create_new_draft(request):
     ctx["page_heading"] = title
     return render(request, "proposal_staff/create_new_draft.html", ctx)
 
-
 @login_required
 def view_draft_detail(request, pk: int):
     user = request.user
@@ -173,6 +198,10 @@ def view_draft_detail(request, pk: int):
                 queryset=DraftItem.objects
                     .select_related("job_rate", "base_setting", "catalog_item")
                     .order_by("sort_order", "pk"),
+            ),
+            Prefetch(
+                "notes",
+                queryset=DraftNote.objects.order_by("sort_order", "pk"),
             )
         )
         .filter(pk=pk)
@@ -240,11 +269,159 @@ def view_draft_detail(request, pk: int):
 
     
     theList = list(draft.items.all())
+
+    notes = [{
+        "subject": (n.subject or "Notes"),
+        "body_html": render_md(n.body_md or ""),
+    } for n in draft.notes.all()]
+
     title = f"{draft.title} Proposal Draft"
-    ctx = {"user_obj": user, "read_only": True, "draft": draft, "items": theList, "admin_users": admin_users, "can_approve": (user.role in (User.Roles.ADMIN, User.Roles.OWNER) or user.is_superuser)}
+    ctx = {"user_obj": user, "read_only": True, "draft": draft, "notes": notes, "items": theList, "admin_users": admin_users, "can_approve": (user.role in (User.Roles.ADMIN, User.Roles.OWNER) or user.is_superuser)}
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title
     return render(request, "proposal_staff/view_draft_detail.html", ctx)
+
+@login_required
+def edit_proposal_draft(request, pk: int):
+    user = request.user
+    if not _allowed_staff(user):
+        raise PermissionDenied("Not allowed")
+    
+    draft = get_object_or_404(ProposalDraft.objects.select_related("company", "discount"), pk=pk)
+
+    if getattr(ProposalDraft, "ApprovalStatus", None):
+        if draft.approval_status == ProposalDraft.ApprovalStatus.CONVERTED:
+            messages.error(request, "Converted drafts cannot be edited.")
+            return redirect(reverse("proposal_staff:draft_detail", args=[draft.pk]))
+        
+    existing_items = {
+        di.catalog_item_id: di
+        for di in DraftItem.objects.select_related("catalog_item").filter(draft=draft)
+    }
+
+    catalog_qs = (
+        CatalogItem.objects
+        .select_related("job_rate", "base_setting")
+        .filter(is_active=True)
+        .order_by("sort_order", "name")
+    )
+    
+    if request.method == "POST":
+        form = DraftForm(request.POST, instance=draft)
+        notes_fs = DraftNoteInlineFormSet(request.POST, instance=draft, prefix="notes", queryset=DraftNote.objects.order_by("sort_order", "pk"))
+
+        if form.is_valid() and notes_fs.is_valid():
+            with transaction.atomic():
+                form.save()
+
+                checked_ids = set()
+
+                for ci in catalog_qs:
+                    if request.POST.get(f"item-{ci.id}-checked") == "on":
+                        checked_ids.add(ci.id)
+
+                to_delete_ids = [cid for cid in existing_items.keys() if cid not in checked_ids]
+                if to_delete_ids:
+                    DraftItem.objects.filter(draft=draft, catalog_item_id__in=to_delete_ids).delete()
+                    for cid in to_delete_ids:
+                        existing_items.pop(cid, None)
+
+                for ci in catalog_qs:
+                    if ci.id not in checked_ids:
+                        continue
+
+                    hours_raw = (request.POST.get(f"items-{ci.id}-hours")
+                                 or request.POST.get(f"item-{ci.id}-hours"))
+                    qty_raw   = (request.POST.get(f"items-{ci.id}-qty")
+                                 or request.POST.get(f"item-{ci.id}-qty"))
+
+
+                    if ci.id in existing_items:
+                        di = existing_items[ci.id]
+                        di.hours    = _dec_or(di.hours,    hours_raw)
+                        di.quantity = _dec_or(di.quantity, qty_raw)
+                        if di.sort_order is None:
+                            di.sort_order = 0
+                        di.save()
+                    else:
+                        hours = _dec_or(ci.default_hours, hours_raw)
+                        qty   = _dec_or(ci.default_quantity, qty_raw)
+                        DraftItem.objects.create(
+                            draft=draft,
+                            catalog_item=ci,
+                            hours=hours,
+                            quantity=qty,
+                        )
+
+                note_objs = notes_fs.save(commit=False)
+                for obj in note_objs:
+                    if obj.sort_order is None:
+                        obj.sort_order = 0
+                    obj.save()
+                for obj in notes_fs.deleted_objects:
+                    obj.delete()
+
+                for idx, it in enumerate(DraftItem.objects.filter(draft=draft).order_by("sort_order", "pk")):
+                    if it.sort_order != idx:
+                        it.sort_order = idx
+                        it.save(update_fields=["sort_order"])
+
+                for idx, nt in enumerate(DraftNote.objects.filter(draft=draft).order_by("sort_order", "pk")):
+                    if nt.sort_order != idx:
+                        nt.sort_order = idx
+                        nt.save(update_fields=["sort_order"])
+                
+                if hasattr(draft, "recalc_totals"):
+                    draft.recalc_totals(save=True)
+            
+            messages.success(request, "Draft updated.")
+            return redirect(reverse("proposal_staff:draft_detail", args=[draft.pk]))
+        else:
+            print("FORM errors:", form.errors)
+            print("NOTES non_form_errors:", notes_fs.non_form_errors())
+            print("NOTES mgmt errors:", notes_fs.management_form.errors)
+            for i, f in enumerate(notes_fs.forms):
+                if f.errors:
+                    print(f"NOTES form[{i}] errors:", f.errors)
+            messages.error(request, "Please fix the errors below.")
+
+    else:
+        form     = DraftForm(instance=draft)
+        notes_fs = DraftNoteInlineFormSet(
+            instance=draft,
+            prefix="notes",
+            queryset=DraftNote.objects.order_by("sort_order", "pk"),
+        )
+    
+    catalog_items = []
+    for ci in catalog_qs:
+        ex = existing_items.get(ci.id)
+        hourly = getattr(getattr(ci, "job_rate", None), "hourly_rate", Decimal("0"))
+        base   = getattr(getattr(ci, "base_setting", None), "base_rate", Decimal("0"))
+        catalog_items.append({
+            "id": ci.id,
+            "name": ci.name,
+            "description": getattr(ci, "description", ""),
+            "default_hours": ci.default_hours,
+            "default_quantity": ci.default_quantity,
+            "is_added": bool(ex),
+            "hours": ex.hours if ex else ci.default_hours,
+            "quantity": ex.quantity if ex else ci.default_quantity,
+            "hourly": hourly,
+            "base": base,
+        })
+
+    title = f"Edit Draft — {draft.title}"
+    ctx = {
+        "user_obj": user,
+        "draft": draft,
+        "form": form,
+        "notes_fs": notes_fs,
+        "catalog_items": catalog_items,
+    }
+    ctx.update(base_ctx(request, title=title))
+    ctx["page_heading"] = title
+    return render(request, "proposal_staff/edit_draft.html", ctx)
 
 @login_required
 def view_proposal_detail(request, pk: int):

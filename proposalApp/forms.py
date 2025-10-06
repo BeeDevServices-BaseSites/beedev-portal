@@ -1,8 +1,19 @@
 # proposalApp/forms.py
 from django import forms
-from django.forms import formset_factory, inlineformset_factory
+from django.forms import formset_factory, inlineformset_factory, BaseInlineFormSet
 from companyApp.models import Company
-from .models import ProposalDraft, Discount, DraftNote
+from .models import ProposalDraft, Discount, DraftNote, DraftItem
+
+class BaseDraftNoteFS(BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+        for form in self.forms:
+            if form.cleaned_data.get("DELETE"):
+                continue
+            subj = (form.cleaned_data.get("subject") or "").strip()
+            body = (form.cleaned_data.get("body_md") or "").strip()
+            if not subj and not body:
+                form.cleaned_data["DELETE"] = True
 
 # -------------------------
 # Draft header form (create & edit)
@@ -82,12 +93,27 @@ DraftNoteFormSet = formset_factory(
 # Notes (edit flow: inline ModelFormSet)
 # -------------------------------------------
 DraftNoteInlineFormSet = inlineformset_factory(
-    parent_model=ProposalDraft,
-    model=DraftNote,
+    ProposalDraft, DraftNote,
+    formset=BaseDraftNoteFS,
     fields=["subject", "body_md", "sort_order"],
-    extra=0,
+    extra=1,
     can_delete=True,
     widgets={
         "body_md": forms.Textarea(attrs={"rows": 4}),
+    },
+)
+
+# -------------------------------------------
+# Item Inline
+# -------------------------------------------
+DraftItemInlineFormSet = inlineformset_factory(
+    parent_model=ProposalDraft,
+    model=DraftItem,
+    fields=["hours", "quantity", "sort_order"],
+    extra=0,
+    can_delete=True,
+    widgets={
+        "hours": forms.NumberInput(attrs={"step": "0.50", "min": "0"}),
+        "quantity": forms.NumberInput(attrs={"step": "1", "min": "0"}),
     },
 )

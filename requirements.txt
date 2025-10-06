@@ -23,6 +23,7 @@ fonttools==4.60.1
 idna==3.10
 ipython==8.37.0
 jedi==0.19.2
+Markdown==3.9
 matplotlib-inline==0.1.7
 mysql-connector-python==9.4.0
 parso==0.8.5

@@ -5,6 +5,7 @@
   --white: #F5F5F5;
   --green: #426e54;
   --yb_border: linear-gradient(5deg, #000000 25%, #f2db1a 75%);
+  --muted: #5b5b5b;
 }
 * {
   padding: 0;
@@ -111,4 +112,26 @@ body main .info .entry td {
   width: 50%;
   text-align: left;
   padding-left: 0.5em;
+}
+body main .info .notes {
+  border: 4px groove transparent;
+  border-image: var(--yb_border);
+  border-image-slice: 1;
+  width: 100%;
+  margin: 1em 0;
+  padding: 0.5em 0;
+}
+body main .info .notes h3 {
+  background-color: var(--background);
+  text-align: left;
+  color: var(--black);
+  width: 95%;
+  padding: 0.2em 0.5em;
+  margin: 0.2em 0;
+}
+body main .info .notes h3 .muted {
+  color: var(--muted);
+}
+body main .info .notes p {
+  margin: 0 0 0.5em 2em;
 }

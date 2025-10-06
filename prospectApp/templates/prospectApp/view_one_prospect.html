@@ -60,7 +60,7 @@
         </table>
         <div class="notes">
             {% for n in notes %}
-                <h3>{{n.subject}} {{n.created_by}} @{{n.created_at}}</h3>
+                <h3>{{n.subject}} <span class="muted">(by: {{n.created_by}} @{{n.created_at}})</span></h3>
                 <p>{{n.body_md}}</p>
             {% endfor %}
         </div>
