@@ -1,6 +1,9 @@
 # Build notes:
 
-# As of 10/2 @1730
+# As of 10/3:
+- Redirect links for adding staff users and updating staff.  No custom pages for this just over to admin
+
+# As of 10/2:
 - Add Prospect
 - Update Prospect
 - Change status of Prospect to include updating to a won which will then convert the prospect to not a client but a company

@@ -11,6 +11,9 @@
     <h2><a href="{% url 'userApp:employee_home' %}">Dashboard</a></h2>
     <h2><a href="{% url 'userApp:view_all_staff' %}">Team Admin</a></h2>
 </div>
+<div class="mini_menu">
+  <h2><a href="{% url 'userApp:edit_staff_profile' staff.pk %}">Update Profile</a></h2>
+</div>
   <div class="info">
     <h3>Your information:</h3>
     <table class="entry">
