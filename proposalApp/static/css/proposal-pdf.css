@@ -9,6 +9,10 @@
   --white-shadow: #FAFAFA;
   --altmuted: #908d8d;
   --yellow-shadow: #f2dc1abd;
+  --red: #B91C1C;
+  --alt_green: #9FC6Af;
+  --grey: #aeacac;
+  --alt_grey: #8c8c8c;
 }
 * {
   padding: 0;
@@ -34,117 +38,118 @@
   border-image: var(--yb_border);
   border-image-slice: 1;
 }
+@page {
+  size: A4;
+  margin: 100pt 32pt 36pt 32pt;
+  @top-center {
+    content: element(page-header);
+  }
+  @bottom-center {
+    content: "Page " counter(page) " of " counter(pages);
+    font-size: 10px;
+    color: #777;
+  }
+}
+* {
+  box-sizing: border-box;
+}
 body {
   font-size: 12px;
   color: var(--black);
 }
-body header {
+body .pdf-running-header {
+  position: running(page-header);
   display: flex;
-  flex-direction: row;
-  justify-content: center;
   align-items: center;
+  justify-content: space-between;
+  gap: 12pt;
+  padding: 8pt 0;
+  margin: 1em;
 }
-body header img {
-  width: 150px;
+body .pdf-running-header .hdr-logo {
+  height: 100px;
 }
-body header .muted {
-  color: var(--muted);
-  margin-left: 20px;
+h1,
+h2,
+h3 {
+  margin: 0 0 8pt;
 }
-body .titlebar {
+h1.doc-title {
+  font-size: 18pt;
+}
+h2 {
+  font-size: 13pt;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 4pt;
+  margin-top: 10pt;
+}
+.section {
+  margin: 10pt 0 6pt;
+}
+.doc-header {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  align-items: flex-start;
-  margin: 8px 0 14px;
-  padding: 10px 12px;
-  border: 1px solid var(--green);
-  background: var(--white-shadow);
+  justify-content: space-between;
+  align-items: flex-end;
+  border-bottom: 2px solid #000;
+  padding-bottom: 8pt;
+  margin-bottom: 10pt;
 }
-body .titlebar h1 {
-  font-size: 20px;
+.doc-meta div {
+  margin: 2pt 0;
 }
-body .titlebar small {
-  color: var(--muted);
+.bullets {
+  margin: 0;
+  padding-left: 14pt;
 }
-body .grid-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
+.bullets li {
+  margin: 4pt 0;
 }
-body .grid-2 .box {
-  border: 1px solid var(--green);
-  padding: 10px;
+.notes-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
-body .grid-2 .box h2 {
-  font-size: 14px;
-  margin: 16px 0 8px;
+.note-item {
+  margin: 8pt 0;
 }
-body .grid-2 .box .meta tr {
-  border: 1px solid var(--green);
+.note-subject {
+  margin-bottom: 2pt;
 }
-body .grid-2 .box .meta th,
-body .grid-2 .box .meta td {
-  padding: 6px;
+.markdown p {
+  margin: 4pt 0;
 }
-body .grid-2 .box .meta td {
-  padding: 2px 0;
-  vertical-align: top;
+.markdown ul,
+.markdown ol {
+  margin: 0 0 6pt 14pt;
 }
-body .grid-2 .box .meta td:first-child {
-  width: 140px;
-  color: var(--black);
+.markdown pre {
+  background: #f6f7f8;
+  padding: 6pt;
+  border-radius: 4pt;
+  overflow: hidden;
 }
-body .grid-2 .box .meta .right {
-  text-align: right;
+.muted {
+  color: #666;
 }
-body .items {
+.signatures {
+  page-break-inside: avoid;
+  margin-top: 14pt;
+}
+.sig-table {
   width: 100%;
   border-collapse: collapse;
 }
-body .items th,
-body .items td {
-  border: 1px solid var(--green);
-  padding: 6px;
+.sig-table td {
+  width: 50%;
+  padding: 12pt 10pt 0 0;
+  vertical-align: bottom;
 }
-body .items th {
-  background: var(--altmuted);
-  text-align: left;
+.sig-line {
+  border-bottom: 1px solid #333;
+  height: 18pt;
 }
-body .items .num {
-  text-align: right;
-  white-space: nowrap;
-}
-body .items .center {
-  text-align: center;
-}
-body .items .muted {
-  color: var(--white-shadow);
-}
-body .totals {
-  width: 100%;
-}
-body .totals table {
-  width: 100%;
-  margin-top: 10px;
-}
-body .totals table .num {
-  text-align: right;
-  white-space: nowrap;
-}
-body .sign-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  margin-top: 30px;
-  padding-top: 30px;
-}
-body .sign-row .sig-box {
-  border-top: 1px solid var(--green);
-  padding-top: 6px;
-}
-body .sign-row .sig-box .sig-label {
-  font-size: 11px;
-  color: var(--muted);
+.sig-label {
+  font-size: 9pt;
+  color: #555;
+  margin-top: 3pt;
 }

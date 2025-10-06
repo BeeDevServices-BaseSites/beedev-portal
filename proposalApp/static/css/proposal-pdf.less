@@ -1,120 +1,185 @@
 @import './root/root.less';
 
+@page {
+    size: A4;
+    margin: 100pt 32pt 36pt 32pt;
 
+    @top-center {
+        content: element(page-header);
+    }
+
+    @bottom-center {
+        content: "Page " counter(page) " of " counter(pages);
+        font-size: 10px;
+        color: #777;
+    }
+}
+* {
+    box-sizing: border-box;
+}
 body {
     font-size: 12px;
     color: var(--black);
 
-    header {
-        .flexrow();
-        img {
-            width: 150px;
-        }
-        .muted {
-            color: var(--muted);
-            margin-left: 20px;
-        }
-    }
-    .titlebar {
-        .flexcolumn();
-        align-items: flex-start;
-        margin: 8px 0 14px;
-        padding: 10px 12px;
-        border: 1px solid var(--green);
-        background: var(--white-shadow);
+    .pdf-running-header {
+        position: running(page-header);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12pt;
+        padding: 8pt 0;
+        margin: 1em;
 
-        h1 {
-            font-size: 20px;
-        }
-        small {
-            color: var(--muted);
-        }
-    }
-    .grid-2 {
-        display:grid;
-        grid-template-columns: 1fr 1fr;
-        gap:18px;
-
-        .box {
-            border:1px solid var(--green);
-            padding:10px;
-
-            h2 {
-                font-size:14px;
-                margin:16px 0 8px;
-            }
-            .meta {
-                tr {
-                    border: 1px solid var(--green);
-                }
-                th, td {
-                    padding: 6px;
-                }
-                td {
-                    padding:2px 0;
-                    vertical-align:top;
-                }
-                td:first-child {
-                    width:140px;
-                    color: var(--black);
-                }
-                .right {
-                    text-align:right;
-                }
-            }
-        }
-    }
-    .items {
-        width:100%;
-        border-collapse: collapse;
-
-        th, td {
-            border:1px solid var(--green);
-            padding:6px;
-        }
-        th {
-            background: var(--altmuted);
-            text-align:left;
-        }
-        .num {
-            text-align:right;
-            white-space:nowrap;
-        }
-        .center {
-            text-align:center;
-        }
-        .muted {
-            color: var(--white-shadow);
-        }
-    }
-    .totals {
-        width:100%;
-
-        table {
-            width:100%;
-            margin-top: 10px;
-
-            .num {
-                text-align:right;
-                white-space:nowrap;
-            }
-        }
-    }
-    .sign-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap:24px;
-        margin-top: 30px;
-        padding-top: 30px;
-
-        .sig-box {
-            border-top:1px solid var(--green);
-            padding-top:6px;
-
-            .sig-label {
-                font-size:11px;
-                color: var(--muted);
-            }
+        .hdr-logo {
+            height: 100px;
         }
     }
 }
+
+h1, h2, h3 { margin: 0 0 8pt; }
+h1.doc-title { font-size: 18pt; }
+h2 { font-size: 13pt; border-bottom: 1px solid #ddd; padding-bottom: 4pt; margin-top: 10pt; }
+.section { margin: 10pt 0 6pt; }
+
+.doc-header {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  border-bottom: 2px solid #000; padding-bottom: 8pt; margin-bottom: 10pt;
+}
+.doc-meta div { margin: 2pt 0; }
+
+.bullets { margin: 0; padding-left: 14pt; }
+.bullets li { margin: 4pt 0; }
+
+.notes-list { list-style: none; padding: 0; margin: 0; }
+.note-item { margin: 8pt 0; }
+.note-subject { margin-bottom: 2pt; }
+.markdown p { margin: 4pt 0; }
+.markdown ul, .markdown ol { margin: 0 0 6pt 14pt; }
+.markdown pre { background: #f6f7f8; padding: 6pt; border-radius: 4pt; overflow: hidden; }
+
+.muted { color: #666; }
+
+.signatures { page-break-inside: avoid; margin-top: 14pt; }
+.sig-table { width: 100%; border-collapse: collapse; }
+.sig-table td { width: 50%; padding: 12pt 10pt 0 0; vertical-align: bottom; }
+.sig-line { border-bottom: 1px solid #333; height: 18pt; }
+.sig-label { font-size: 9pt; color: #555; margin-top: 3pt; }
+
+
+// body {
+//     font-size: 12px;
+//     color: var(--black);
+
+//     header {
+//         .flexrow();
+//         img {
+//             width: 150px;
+//         }
+//         .muted {
+//             color: var(--muted);
+//             margin-left: 20px;
+//         }
+//     }
+//     .titlebar {
+//         .flexcolumn();
+//         align-items: flex-start;
+//         margin: 8px 0 14px;
+//         padding: 10px 12px;
+//         border: 1px solid var(--green);
+//         background: var(--white-shadow);
+
+//         h1 {
+//             font-size: 20px;
+//         }
+//         small {
+//             color: var(--muted);
+//         }
+//     }
+//     .grid-2 {
+//         display:grid;
+//         grid-template-columns: 1fr 1fr;
+//         gap:18px;
+
+//         .box {
+//             border:1px solid var(--green);
+//             padding:10px;
+
+//             h2 {
+//                 font-size:14px;
+//                 margin:16px 0 8px;
+//             }
+//             .meta {
+//                 tr {
+//                     border: 1px solid var(--green);
+//                 }
+//                 th, td {
+//                     padding: 6px;
+//                 }
+//                 td {
+//                     padding:2px 0;
+//                     vertical-align:top;
+//                 }
+//                 td:first-child {
+//                     width:140px;
+//                     color: var(--black);
+//                 }
+//                 .right {
+//                     text-align:right;
+//                 }
+//             }
+//         }
+//     }
+//     .items {
+//         width:100%;
+//         border-collapse: collapse;
+
+//         th, td {
+//             border:1px solid var(--green);
+//             padding:6px;
+//         }
+//         th {
+//             background: var(--altmuted);
+//             text-align:left;
+//         }
+//         .num {
+//             text-align:right;
+//             white-space:nowrap;
+//         }
+//         .center {
+//             text-align:center;
+//         }
+//         .muted {
+//             color: var(--white-shadow);
+//         }
+//     }
+//     .totals {
+//         width:100%;
+
+//         table {
+//             width:100%;
+//             margin-top: 10px;
+
+//             .num {
+//                 text-align:right;
+//                 white-space:nowrap;
+//             }
+//         }
+//     }
+//     .sign-row {
+//         display: grid;
+//         grid-template-columns: 1fr 1fr;
+//         gap:24px;
+//         margin-top: 30px;
+//         padding-top: 30px;
+
+//         .sig-box {
+//             border-top:1px solid var(--green);
+//             padding-top:6px;
+
+//             .sig-label {
+//                 font-size:11px;
+//                 color: var(--muted);
+//             }
+//         }
+//     }
+// }

@@ -83,6 +83,17 @@
   </div>
 </fieldset>
 
+<fieldset class="box">
+  <legend>Executive Summary</legend>
+  <div>
+    <label for="{{ form.summary_md.id_for_label }}">{{ form.summary_md.label }}</label>
+    {{ form.summary_md }}
+    {% if form.summary_md.errors %}
+      <div class="field-errors">{% for e in form.summary_md.errors %}<p>{{ e }}</p>{% endfor %}</div>
+    {% endif %}
+    <p class="help">This is the one-page summary clients will see first.</p>
+  </div>
+</fieldset>
 
   <fieldset class="card">
     <legend>Notes</legend>

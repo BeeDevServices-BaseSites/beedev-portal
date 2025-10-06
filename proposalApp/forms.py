@@ -23,7 +23,7 @@ class DraftForm(forms.ModelForm):
         model = ProposalDraft
         fields = [
             "company", "title", "currency", "discount",
-            "contact_name", "contact_email",
+            "contact_name", "contact_email", "summary_md",
         ]
         labels = {
             "company": "Company",
@@ -32,6 +32,7 @@ class DraftForm(forms.ModelForm):
             "discount": "Discount",
             "contact_name": "Primary contact name",
             "contact_email": "Primary contact email",
+            "summary_md": "Executive Summary (Markdown)",
         }
         widgets = {
             "company": forms.Select(attrs={"required": "required", "id": "id_company"}),
@@ -40,6 +41,7 @@ class DraftForm(forms.ModelForm):
             "discount": forms.Select(),
             "contact_name": forms.TextInput(attrs={"id": "id_contact_name"}),
             "contact_email": forms.EmailInput(attrs={"id": "id_contact_email"}),
+            "summary_md": forms.Textarea(attrs={"rows": 6}),
         }
 
     def __init__(self, *args, **kwargs):

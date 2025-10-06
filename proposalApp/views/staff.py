@@ -4,7 +4,7 @@ from django.db.models import Prefetch, Max
 from django.views.generic import TemplateView
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db import transaction
-from ..models import ProposalDraft, DraftItem, DraftNote, Proposal, ProposalLineItem, ProposalAppliedDiscount, ProposalRecipient, ProposalEvent, CatalogItem
+from ..models import ProposalDraft, DraftItem, DraftNote, Proposal, ProposalLineItem, ProposalAppliedDiscount, ProposalRecipient, ProposalEvent, CatalogItem, ProposalNote, ProposalSummary
 from userApp.models import User
 from companyApp.models import Company
 from core.utils.context import base_ctx
@@ -258,7 +258,13 @@ def view_draft_detail(request, pk: int):
                 proposal = draft.convert_to_proposal(actor=user)
                 base_url = request.build_absolute_uri("/")
                 # This controls replacing the pdf... (this will keep one version per proposal)
-                generate_proposal_pdf(proposal, base_url=base_url, force=True, overwrite=True, delete_old=True)
+                generate_proposal_pdf(
+                    proposal,
+                    request=request,
+                    base_url=base_url,
+                    overwrite=True,   # single canonical file per proposal
+                    delete_old=True,  # remove old PDF before saving new one
+                )
                 # This controls versioning the pdf... (this will keep multiple versions per proposal)
                 # generate_proposal_pdf(proposal, base_url=base_url, overwrite=False)
             messages.success(request, "Converted to proposal and generated PDF.")
@@ -270,13 +276,15 @@ def view_draft_detail(request, pk: int):
     
     theList = list(draft.items.all())
 
+    summary_html = render_md(draft.summary_md or "")
+
     notes = [{
         "subject": (n.subject or "Notes"),
         "body_html": render_md(n.body_md or ""),
     } for n in draft.notes.all()]
 
     title = f"{draft.title} Proposal Draft"
-    ctx = {"user_obj": user, "read_only": True, "draft": draft, "notes": notes, "items": theList, "admin_users": admin_users, "can_approve": (user.role in (User.Roles.ADMIN, User.Roles.OWNER) or user.is_superuser)}
+    ctx = {"user_obj": user, "read_only": True, "draft": draft, "notes": notes, "items": theList, "summary_html": summary_html, "admin_users": admin_users, "can_approve": (user.role in (User.Roles.ADMIN, User.Roles.OWNER) or user.is_superuser)}
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title
     return render(request, "proposal_staff/view_draft_detail.html", ctx)
@@ -450,7 +458,15 @@ def view_proposal_detail(request, pk: int):
             Prefetch(
                 "events",
                 queryset=ProposalEvent.objects.select_related("actor").order_by("-at", "pk")
-            )
+            ),
+            Prefetch(
+                "notes",
+                queryset=ProposalNote.objects.filter(is_visible_to_client=True).order_by("sort_order", "pk"),
+            ),
+            Prefetch(
+                "summary",
+                queryset=ProposalSummary.objects.all()
+            ),
         )
         .get(pk=pk)
     )
@@ -463,9 +479,15 @@ def view_proposal_detail(request, pk: int):
         
     theList = list(proposal.line_items.all())
     events = list(proposal.events.all())
+    summary_html = render_md(getattr(proposal.summary, "body_md", "") or "")
+
+    notes_rendered = [
+        {"subject": (n.subject or "Notes"), "body_html": render_md(n.body_md or "")}
+        for n in proposal.notes.all()
+    ]
 
     title = f"{proposal.title} Proposal"
-    ctx = {"user_obj": user, "read_only": True, "proposal": proposal, "items": theList, "events": events}
+    ctx = {"user_obj": user, "read_only": True, "proposal": proposal, "items": theList, "summary_html": summary_html, "events": events, "notes_rendered": notes_rendered}
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title 
     return render(request, "proposal_staff/view_proposal_detail.html", ctx)
@@ -481,7 +503,8 @@ def generate_proposal_pdf_view(request, pk: int):
     proposal = get_object_or_404(Proposal.objects.select_related("company"), pk=pk)
 
     base_url = request.build_absolute_uri("/")
-    generate_proposal_pdf(proposal, request=request, base_url=base_url, force=True)
+    generate_proposal_pdf(proposal, request=request, base_url=base_url, overwrite=True,
+    delete_old=True,)
     messages.success(request, "PDF generated.")
     return redirect(reverse("proposal_staff:proposal_detail", args=[proposal.id]))
 

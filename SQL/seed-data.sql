@@ -16,6 +16,25 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
+-- Table structure for table `auth_group_permissions`
+--
+
+DROP TABLE IF EXISTS `auth_group_permissions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `auth_group_permissions` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `group_id` int NOT NULL,
+  `permission_id` int NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `auth_group_permissions_group_id_permission_id_0cd325b0_uniq` (`group_id`,`permission_id`),
+  KEY `auth_group_permissio_permission_id_84c5c92e_fk_auth_perm` (`permission_id`),
+  CONSTRAINT `auth_group_permissio_permission_id_84c5c92e_fk_auth_perm` FOREIGN KEY (`permission_id`) REFERENCES `auth_permission` (`id`),
+  CONSTRAINT `auth_group_permissions_group_id_b120cbf9_fk_auth_group_id` FOREIGN KEY (`group_id`) REFERENCES `auth_group` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=421 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Dumping data for table `auth_group_permissions`
 --
 
@@ -26,14 +45,53 @@ INSERT INTO `auth_group_permissions` VALUES (1,1,1),(2,1,2),(3,1,3),(4,1,4),(5,1
 UNLOCK TABLES;
 
 --
+-- Table structure for table `auth_permission`
+--
+
+DROP TABLE IF EXISTS `auth_permission`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `auth_permission` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) NOT NULL,
+  `content_type_id` int NOT NULL,
+  `codename` varchar(100) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `auth_permission_content_type_id_codename_01ab375a_uniq` (`content_type_id`,`codename`),
+  CONSTRAINT `auth_permission_content_type_id_2f476e4b_fk_django_co` FOREIGN KEY (`content_type_id`) REFERENCES `django_content_type` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=209 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Dumping data for table `auth_permission`
 --
 
 LOCK TABLES `auth_permission` WRITE;
 /*!40000 ALTER TABLE `auth_permission` DISABLE KEYS */;
-INSERT INTO `auth_permission` VALUES (1,'Can add log entry',1,'add_logentry'),(2,'Can change log entry',1,'change_logentry'),(3,'Can delete log entry',1,'delete_logentry'),(4,'Can view log entry',1,'view_logentry'),(5,'Can add permission',2,'add_permission'),(6,'Can change permission',2,'change_permission'),(7,'Can delete permission',2,'delete_permission'),(8,'Can view permission',2,'view_permission'),(9,'Can add group',3,'add_group'),(10,'Can change group',3,'change_group'),(11,'Can delete group',3,'delete_group'),(12,'Can view group',3,'view_group'),(13,'Can add content type',4,'add_contenttype'),(14,'Can change content type',4,'change_contenttype'),(15,'Can delete content type',4,'delete_contenttype'),(16,'Can view content type',4,'view_contenttype'),(17,'Can add session',5,'add_session'),(18,'Can change session',5,'change_session'),(19,'Can delete session',5,'delete_session'),(20,'Can view session',5,'view_session'),(21,'Can add user',6,'add_user'),(22,'Can change user',6,'change_user'),(23,'Can delete user',6,'delete_user'),(24,'Can view user',6,'view_user'),(25,'Can add client profile',7,'add_clientprofile'),(26,'Can change client profile',7,'change_clientprofile'),(27,'Can delete client profile',7,'delete_clientprofile'),(28,'Can view client profile',7,'view_clientprofile'),(29,'Can add employee profile',8,'add_employeeprofile'),(30,'Can change employee profile',8,'change_employeeprofile'),(31,'Can delete employee profile',8,'delete_employeeprofile'),(32,'Can view employee profile',8,'view_employeeprofile'),(33,'Can add company',9,'add_company'),(34,'Can change company',9,'change_company'),(35,'Can delete company',9,'delete_company'),(36,'Can view company',9,'view_company'),(37,'Can add company membership',10,'add_companymembership'),(38,'Can change company membership',10,'change_companymembership'),(39,'Can delete company membership',10,'delete_companymembership'),(40,'Can view company membership',10,'view_companymembership'),(41,'Can add company contact',11,'add_companycontact'),(42,'Can change company contact',11,'change_companycontact'),(43,'Can delete company contact',11,'delete_companycontact'),(44,'Can view company contact',11,'view_companycontact'),(45,'Can add company link',12,'add_companylink'),(46,'Can change company link',12,'change_companylink'),(47,'Can delete company link',12,'delete_companylink'),(48,'Can view company link',12,'view_companylink'),(49,'Can add dnc reason',13,'add_dncreason'),(50,'Can change dnc reason',13,'change_dncreason'),(51,'Can delete dnc reason',13,'delete_dncreason'),(52,'Can view dnc reason',13,'view_dncreason'),(53,'Can add dnc entry',14,'add_dncentry'),(54,'Can change dnc entry',14,'change_dncentry'),(55,'Can delete dnc entry',14,'delete_dncentry'),(56,'Can view dnc entry',14,'view_dncentry'),(57,'Can add job rate',15,'add_jobrate'),(58,'Can change job rate',15,'change_jobrate'),(59,'Can delete job rate',15,'delete_jobrate'),(60,'Can view job rate',15,'view_jobrate'),(61,'Can add base setting',16,'add_basesetting'),(62,'Can change base setting',16,'change_basesetting'),(63,'Can delete base setting',16,'delete_basesetting'),(64,'Can view base setting',16,'view_basesetting'),(65,'Can add discount',17,'add_discount'),(66,'Can change discount',17,'change_discount'),(67,'Can delete discount',17,'delete_discount'),(68,'Can view discount',17,'view_discount'),(69,'Can add catalog item',18,'add_catalogitem'),(70,'Can change catalog item',18,'change_catalogitem'),(71,'Can delete catalog item',18,'delete_catalogitem'),(72,'Can view catalog item',18,'view_catalogitem'),(73,'Can add cost tier',19,'add_costtier'),(74,'Can change cost tier',19,'change_costtier'),(75,'Can delete cost tier',19,'delete_costtier'),(76,'Can view cost tier',19,'view_costtier'),(77,'Can add proposal draft',20,'add_proposaldraft'),(78,'Can change proposal draft',20,'change_proposaldraft'),(79,'Can delete proposal draft',20,'delete_proposaldraft'),(80,'Can view proposal draft',20,'view_proposaldraft'),(81,'Can add draft item',21,'add_draftitem'),(82,'Can change draft item',21,'change_draftitem'),(83,'Can delete draft item',21,'delete_draftitem'),(84,'Can view draft item',21,'view_draftitem'),(85,'Can add proposal',22,'add_proposal'),(86,'Can change proposal',22,'change_proposal'),(87,'Can delete proposal',22,'delete_proposal'),(88,'Can view proposal',22,'view_proposal'),(89,'Can add proposal line item',23,'add_proposallineitem'),(90,'Can change proposal line item',23,'change_proposallineitem'),(91,'Can delete proposal line item',23,'delete_proposallineitem'),(92,'Can view proposal line item',23,'view_proposallineitem'),(93,'Can add proposal applied discount',24,'add_proposalapplieddiscount'),(94,'Can change proposal applied discount',24,'change_proposalapplieddiscount'),(95,'Can delete proposal applied discount',24,'delete_proposalapplieddiscount'),(96,'Can view proposal applied discount',24,'view_proposalapplieddiscount'),(97,'Can add proposal recipient',25,'add_proposalrecipient'),(98,'Can change proposal recipient',25,'change_proposalrecipient'),(99,'Can delete proposal recipient',25,'delete_proposalrecipient'),(100,'Can view proposal recipient',25,'view_proposalrecipient'),(101,'Can add proposal viewer',26,'add_proposalviewer'),(102,'Can change proposal viewer',26,'change_proposalviewer'),(103,'Can delete proposal viewer',26,'delete_proposalviewer'),(104,'Can view proposal viewer',26,'view_proposalviewer'),(105,'Can add proposal event',27,'add_proposalevent'),(106,'Can change proposal event',27,'change_proposalevent'),(107,'Can delete proposal event',27,'delete_proposalevent'),(108,'Can view proposal event',27,'view_proposalevent'),(109,'Can add invoice',28,'add_invoice'),(110,'Can change invoice',28,'change_invoice'),(111,'Can delete invoice',28,'delete_invoice'),(112,'Can view invoice',28,'view_invoice'),(113,'Can add invoice line item',29,'add_invoicelineitem'),(114,'Can change invoice line item',29,'change_invoicelineitem'),(115,'Can delete invoice line item',29,'delete_invoicelineitem'),(116,'Can view invoice line item',29,'view_invoicelineitem'),(117,'Can add invoice applied discount',30,'add_invoiceapplieddiscount'),(118,'Can change invoice applied discount',30,'change_invoiceapplieddiscount'),(119,'Can delete invoice applied discount',30,'delete_invoiceapplieddiscount'),(120,'Can view invoice applied discount',30,'view_invoiceapplieddiscount'),(121,'Can add payment',31,'add_payment'),(122,'Can change payment',31,'change_payment'),(123,'Can delete payment',31,'delete_payment'),(124,'Can view payment',31,'view_payment'),(125,'Can add invoice viewer',32,'add_invoiceviewer'),(126,'Can change invoice viewer',32,'change_invoiceviewer'),(127,'Can delete invoice viewer',32,'delete_invoiceviewer'),(128,'Can view invoice viewer',32,'view_invoiceviewer'),(129,'Can add project',33,'add_project'),(130,'Can change project',33,'change_project'),(131,'Can delete project',33,'delete_project'),(132,'Can view project',33,'view_project'),(133,'Can add project member',34,'add_projectmember'),(134,'Can change project member',34,'change_projectmember'),(135,'Can delete project member',34,'delete_projectmember'),(136,'Can view project member',34,'view_projectmember'),(137,'Can add project task',35,'add_projecttask'),(138,'Can change project task',35,'change_projecttask'),(139,'Can delete project task',35,'delete_projecttask'),(140,'Can view project task',35,'view_projecttask'),(141,'Can add project milestone',36,'add_projectmilestone'),(142,'Can change project milestone',36,'change_projectmilestone'),(143,'Can delete project milestone',36,'delete_projectmilestone'),(144,'Can view project milestone',36,'view_projectmilestone'),(145,'Can add project update',37,'add_projectupdate'),(146,'Can change project update',37,'change_projectupdate'),(147,'Can delete project update',37,'delete_projectupdate'),(148,'Can view project update',37,'view_projectupdate'),(149,'Can add project update attachment',38,'add_projectupdateattachment'),(150,'Can change project update attachment',38,'change_projectupdateattachment'),(151,'Can delete project update attachment',38,'delete_projectupdateattachment'),(152,'Can view project update attachment',38,'view_projectupdateattachment'),(153,'Can add project environment',39,'add_projectenvironment'),(154,'Can change project environment',39,'change_projectenvironment'),(155,'Can delete project environment',39,'delete_projectenvironment'),(156,'Can view project environment',39,'view_projectenvironment'),(157,'Can add project link',40,'add_projectlink'),(158,'Can change project link',40,'change_projectlink'),(159,'Can delete project link',40,'delete_projectlink'),(160,'Can view project link',40,'view_projectlink'),(161,'Can add project viewer',41,'add_projectviewer'),(162,'Can change project viewer',41,'change_projectviewer'),(163,'Can delete project viewer',41,'delete_projectviewer'),(164,'Can view project viewer',41,'view_projectviewer'),(165,'Can add project week note',42,'add_projectweeknote'),(166,'Can change project week note',42,'change_projectweeknote'),(167,'Can delete project week note',42,'delete_projectweeknote'),(168,'Can view project week note',42,'view_projectweeknote'),(169,'Can add ticket',43,'add_ticket'),(170,'Can change ticket',43,'change_ticket'),(171,'Can delete ticket',43,'delete_ticket'),(172,'Can view ticket',43,'view_ticket'),(173,'Can add ticket message',44,'add_ticketmessage'),(174,'Can change ticket message',44,'change_ticketmessage'),(175,'Can delete ticket message',44,'delete_ticketmessage'),(176,'Can view ticket message',44,'view_ticketmessage'),(177,'Can add ticket attachment',45,'add_ticketattachment'),(178,'Can change ticket attachment',45,'change_ticketattachment'),(179,'Can delete ticket attachment',45,'delete_ticketattachment'),(180,'Can view ticket attachment',45,'view_ticketattachment'),(181,'Can add ticket event',46,'add_ticketevent'),(182,'Can change ticket event',46,'change_ticketevent'),(183,'Can delete ticket event',46,'delete_ticketevent'),(184,'Can view ticket event',46,'view_ticketevent'),(185,'Can add prospect',47,'add_prospect'),(186,'Can change prospect',47,'change_prospect'),(187,'Can delete prospect',47,'delete_prospect'),(188,'Can view prospect',47,'view_prospect'),(189,'Can add announcement',48,'add_announcement'),(190,'Can change announcement',48,'change_announcement'),(191,'Can delete announcement',48,'delete_announcement'),(192,'Can view announcement',48,'view_announcement'),(193,'Can add version',49,'add_version'),(194,'Can change version',49,'change_version'),(195,'Can delete version',49,'delete_version'),(196,'Can view version',49,'view_version'),(197,'Can add proposal section',50,'add_proposalsection'),(198,'Can change proposal section',50,'change_proposalsection'),(199,'Can delete proposal section',50,'delete_proposalsection'),(200,'Can view proposal section',50,'view_proposalsection'),(201,'Can add draft note',51,'add_draftnote'),(202,'Can change draft note',51,'change_draftnote'),(203,'Can delete draft note',51,'delete_draftnote'),(204,'Can view draft note',51,'view_draftnote');
+INSERT INTO `auth_permission` VALUES (1,'Can add log entry',1,'add_logentry'),(2,'Can change log entry',1,'change_logentry'),(3,'Can delete log entry',1,'delete_logentry'),(4,'Can view log entry',1,'view_logentry'),(5,'Can add permission',2,'add_permission'),(6,'Can change permission',2,'change_permission'),(7,'Can delete permission',2,'delete_permission'),(8,'Can view permission',2,'view_permission'),(9,'Can add group',3,'add_group'),(10,'Can change group',3,'change_group'),(11,'Can delete group',3,'delete_group'),(12,'Can view group',3,'view_group'),(13,'Can add content type',4,'add_contenttype'),(14,'Can change content type',4,'change_contenttype'),(15,'Can delete content type',4,'delete_contenttype'),(16,'Can view content type',4,'view_contenttype'),(17,'Can add session',5,'add_session'),(18,'Can change session',5,'change_session'),(19,'Can delete session',5,'delete_session'),(20,'Can view session',5,'view_session'),(21,'Can add user',6,'add_user'),(22,'Can change user',6,'change_user'),(23,'Can delete user',6,'delete_user'),(24,'Can view user',6,'view_user'),(25,'Can add client profile',7,'add_clientprofile'),(26,'Can change client profile',7,'change_clientprofile'),(27,'Can delete client profile',7,'delete_clientprofile'),(28,'Can view client profile',7,'view_clientprofile'),(29,'Can add employee profile',8,'add_employeeprofile'),(30,'Can change employee profile',8,'change_employeeprofile'),(31,'Can delete employee profile',8,'delete_employeeprofile'),(32,'Can view employee profile',8,'view_employeeprofile'),(33,'Can add company',9,'add_company'),(34,'Can change company',9,'change_company'),(35,'Can delete company',9,'delete_company'),(36,'Can view company',9,'view_company'),(37,'Can add company membership',10,'add_companymembership'),(38,'Can change company membership',10,'change_companymembership'),(39,'Can delete company membership',10,'delete_companymembership'),(40,'Can view company membership',10,'view_companymembership'),(41,'Can add company contact',11,'add_companycontact'),(42,'Can change company contact',11,'change_companycontact'),(43,'Can delete company contact',11,'delete_companycontact'),(44,'Can view company contact',11,'view_companycontact'),(45,'Can add company link',12,'add_companylink'),(46,'Can change company link',12,'change_companylink'),(47,'Can delete company link',12,'delete_companylink'),(48,'Can view company link',12,'view_companylink'),(49,'Can add dnc reason',13,'add_dncreason'),(50,'Can change dnc reason',13,'change_dncreason'),(51,'Can delete dnc reason',13,'delete_dncreason'),(52,'Can view dnc reason',13,'view_dncreason'),(53,'Can add dnc entry',14,'add_dncentry'),(54,'Can change dnc entry',14,'change_dncentry'),(55,'Can delete dnc entry',14,'delete_dncentry'),(56,'Can view dnc entry',14,'view_dncentry'),(57,'Can add job rate',15,'add_jobrate'),(58,'Can change job rate',15,'change_jobrate'),(59,'Can delete job rate',15,'delete_jobrate'),(60,'Can view job rate',15,'view_jobrate'),(61,'Can add base setting',16,'add_basesetting'),(62,'Can change base setting',16,'change_basesetting'),(63,'Can delete base setting',16,'delete_basesetting'),(64,'Can view base setting',16,'view_basesetting'),(65,'Can add discount',17,'add_discount'),(66,'Can change discount',17,'change_discount'),(67,'Can delete discount',17,'delete_discount'),(68,'Can view discount',17,'view_discount'),(69,'Can add catalog item',18,'add_catalogitem'),(70,'Can change catalog item',18,'change_catalogitem'),(71,'Can delete catalog item',18,'delete_catalogitem'),(72,'Can view catalog item',18,'view_catalogitem'),(73,'Can add cost tier',19,'add_costtier'),(74,'Can change cost tier',19,'change_costtier'),(75,'Can delete cost tier',19,'delete_costtier'),(76,'Can view cost tier',19,'view_costtier'),(77,'Can add proposal draft',20,'add_proposaldraft'),(78,'Can change proposal draft',20,'change_proposaldraft'),(79,'Can delete proposal draft',20,'delete_proposaldraft'),(80,'Can view proposal draft',20,'view_proposaldraft'),(81,'Can add draft item',21,'add_draftitem'),(82,'Can change draft item',21,'change_draftitem'),(83,'Can delete draft item',21,'delete_draftitem'),(84,'Can view draft item',21,'view_draftitem'),(85,'Can add proposal',22,'add_proposal'),(86,'Can change proposal',22,'change_proposal'),(87,'Can delete proposal',22,'delete_proposal'),(88,'Can view proposal',22,'view_proposal'),(89,'Can add proposal line item',23,'add_proposallineitem'),(90,'Can change proposal line item',23,'change_proposallineitem'),(91,'Can delete proposal line item',23,'delete_proposallineitem'),(92,'Can view proposal line item',23,'view_proposallineitem'),(93,'Can add proposal applied discount',24,'add_proposalapplieddiscount'),(94,'Can change proposal applied discount',24,'change_proposalapplieddiscount'),(95,'Can delete proposal applied discount',24,'delete_proposalapplieddiscount'),(96,'Can view proposal applied discount',24,'view_proposalapplieddiscount'),(97,'Can add proposal recipient',25,'add_proposalrecipient'),(98,'Can change proposal recipient',25,'change_proposalrecipient'),(99,'Can delete proposal recipient',25,'delete_proposalrecipient'),(100,'Can view proposal recipient',25,'view_proposalrecipient'),(101,'Can add proposal viewer',26,'add_proposalviewer'),(102,'Can change proposal viewer',26,'change_proposalviewer'),(103,'Can delete proposal viewer',26,'delete_proposalviewer'),(104,'Can view proposal viewer',26,'view_proposalviewer'),(105,'Can add proposal event',27,'add_proposalevent'),(106,'Can change proposal event',27,'change_proposalevent'),(107,'Can delete proposal event',27,'delete_proposalevent'),(108,'Can view proposal event',27,'view_proposalevent'),(109,'Can add invoice',28,'add_invoice'),(110,'Can change invoice',28,'change_invoice'),(111,'Can delete invoice',28,'delete_invoice'),(112,'Can view invoice',28,'view_invoice'),(113,'Can add invoice line item',29,'add_invoicelineitem'),(114,'Can change invoice line item',29,'change_invoicelineitem'),(115,'Can delete invoice line item',29,'delete_invoicelineitem'),(116,'Can view invoice line item',29,'view_invoicelineitem'),(117,'Can add invoice applied discount',30,'add_invoiceapplieddiscount'),(118,'Can change invoice applied discount',30,'change_invoiceapplieddiscount'),(119,'Can delete invoice applied discount',30,'delete_invoiceapplieddiscount'),(120,'Can view invoice applied discount',30,'view_invoiceapplieddiscount'),(121,'Can add payment',31,'add_payment'),(122,'Can change payment',31,'change_payment'),(123,'Can delete payment',31,'delete_payment'),(124,'Can view payment',31,'view_payment'),(125,'Can add invoice viewer',32,'add_invoiceviewer'),(126,'Can change invoice viewer',32,'change_invoiceviewer'),(127,'Can delete invoice viewer',32,'delete_invoiceviewer'),(128,'Can view invoice viewer',32,'view_invoiceviewer'),(129,'Can add project',33,'add_project'),(130,'Can change project',33,'change_project'),(131,'Can delete project',33,'delete_project'),(132,'Can view project',33,'view_project'),(133,'Can add project member',34,'add_projectmember'),(134,'Can change project member',34,'change_projectmember'),(135,'Can delete project member',34,'delete_projectmember'),(136,'Can view project member',34,'view_projectmember'),(137,'Can add project task',35,'add_projecttask'),(138,'Can change project task',35,'change_projecttask'),(139,'Can delete project task',35,'delete_projecttask'),(140,'Can view project task',35,'view_projecttask'),(141,'Can add project milestone',36,'add_projectmilestone'),(142,'Can change project milestone',36,'change_projectmilestone'),(143,'Can delete project milestone',36,'delete_projectmilestone'),(144,'Can view project milestone',36,'view_projectmilestone'),(145,'Can add project update',37,'add_projectupdate'),(146,'Can change project update',37,'change_projectupdate'),(147,'Can delete project update',37,'delete_projectupdate'),(148,'Can view project update',37,'view_projectupdate'),(149,'Can add project update attachment',38,'add_projectupdateattachment'),(150,'Can change project update attachment',38,'change_projectupdateattachment'),(151,'Can delete project update attachment',38,'delete_projectupdateattachment'),(152,'Can view project update attachment',38,'view_projectupdateattachment'),(153,'Can add project environment',39,'add_projectenvironment'),(154,'Can change project environment',39,'change_projectenvironment'),(155,'Can delete project environment',39,'delete_projectenvironment'),(156,'Can view project environment',39,'view_projectenvironment'),(157,'Can add project link',40,'add_projectlink'),(158,'Can change project link',40,'change_projectlink'),(159,'Can delete project link',40,'delete_projectlink'),(160,'Can view project link',40,'view_projectlink'),(161,'Can add project viewer',41,'add_projectviewer'),(162,'Can change project viewer',41,'change_projectviewer'),(163,'Can delete project viewer',41,'delete_projectviewer'),(164,'Can view project viewer',41,'view_projectviewer'),(165,'Can add project week note',42,'add_projectweeknote'),(166,'Can change project week note',42,'change_projectweeknote'),(167,'Can delete project week note',42,'delete_projectweeknote'),(168,'Can view project week note',42,'view_projectweeknote'),(169,'Can add ticket',43,'add_ticket'),(170,'Can change ticket',43,'change_ticket'),(171,'Can delete ticket',43,'delete_ticket'),(172,'Can view ticket',43,'view_ticket'),(173,'Can add ticket message',44,'add_ticketmessage'),(174,'Can change ticket message',44,'change_ticketmessage'),(175,'Can delete ticket message',44,'delete_ticketmessage'),(176,'Can view ticket message',44,'view_ticketmessage'),(177,'Can add ticket attachment',45,'add_ticketattachment'),(178,'Can change ticket attachment',45,'change_ticketattachment'),(179,'Can delete ticket attachment',45,'delete_ticketattachment'),(180,'Can view ticket attachment',45,'view_ticketattachment'),(181,'Can add ticket event',46,'add_ticketevent'),(182,'Can change ticket event',46,'change_ticketevent'),(183,'Can delete ticket event',46,'delete_ticketevent'),(184,'Can view ticket event',46,'view_ticketevent'),(185,'Can add prospect',47,'add_prospect'),(186,'Can change prospect',47,'change_prospect'),(187,'Can delete prospect',47,'delete_prospect'),(188,'Can view prospect',47,'view_prospect'),(189,'Can add announcement',48,'add_announcement'),(190,'Can change announcement',48,'change_announcement'),(191,'Can delete announcement',48,'delete_announcement'),(192,'Can view announcement',48,'view_announcement'),(193,'Can add version',49,'add_version'),(194,'Can change version',49,'change_version'),(195,'Can delete version',49,'delete_version'),(196,'Can view version',49,'view_version'),(197,'Can add proposal section',50,'add_proposalsection'),(198,'Can change proposal section',50,'change_proposalsection'),(199,'Can delete proposal section',50,'delete_proposalsection'),(200,'Can view proposal section',50,'view_proposalsection'),(201,'Can add draft note',51,'add_draftnote'),(202,'Can change draft note',51,'change_draftnote'),(203,'Can delete draft note',51,'delete_draftnote'),(204,'Can view draft note',51,'view_draftnote'),(205,'Can add prospect note',52,'add_prospectnote'),(206,'Can change prospect note',52,'change_prospectnote'),(207,'Can delete prospect note',52,'delete_prospectnote'),(208,'Can view prospect note',52,'view_prospectnote');
 /*!40000 ALTER TABLE `auth_permission` ENABLE KEYS */;
 UNLOCK TABLES;
+
+--
+-- Table structure for table `proposalApp_basesetting`
+--
+
+DROP TABLE IF EXISTS `proposalApp_basesetting`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `proposalApp_basesetting` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `code` varchar(60) NOT NULL,
+  `name` varchar(160) NOT NULL,
+  `base_rate` decimal(12,2) NOT NULL,
+  `description` longtext NOT NULL,
+  `is_active` tinyint(1) NOT NULL,
+  `sort_order` int unsigned NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `code` (`code`),
+  CONSTRAINT `proposalapp_basesetting_chk_1` CHECK ((`sort_order` >= 0))
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Dumping data for table `proposalApp_basesetting`
@@ -46,6 +104,35 @@ INSERT INTO `proposalApp_basesetting` VALUES (1,'vite-base','Vite App',300.00,''
 UNLOCK TABLES;
 
 --
+-- Table structure for table `proposalApp_catalogitem`
+--
+
+DROP TABLE IF EXISTS `proposalApp_catalogitem`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `proposalApp_catalogitem` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `code` varchar(80) NOT NULL,
+  `name` varchar(160) NOT NULL,
+  `description` longtext NOT NULL,
+  `default_hours` decimal(8,2) NOT NULL,
+  `default_quantity` decimal(8,2) NOT NULL,
+  `is_active` tinyint(1) NOT NULL,
+  `tags` varchar(200) NOT NULL,
+  `sort_order` int unsigned NOT NULL,
+  `base_setting_id` bigint NOT NULL,
+  `job_rate_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `code` (`code`),
+  KEY `proposalApp_catalogi_base_setting_id_19dd360b_fk_proposalA` (`base_setting_id`),
+  KEY `proposalApp_catalogi_job_rate_id_ede2c7c8_fk_proposalA` (`job_rate_id`),
+  CONSTRAINT `proposalApp_catalogi_base_setting_id_19dd360b_fk_proposalA` FOREIGN KEY (`base_setting_id`) REFERENCES `proposalApp_basesetting` (`id`),
+  CONSTRAINT `proposalApp_catalogi_job_rate_id_ede2c7c8_fk_proposalA` FOREIGN KEY (`job_rate_id`) REFERENCES `proposalApp_jobrate` (`id`),
+  CONSTRAINT `proposalapp_catalogitem_chk_1` CHECK ((`sort_order` >= 0))
+) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Dumping data for table `proposalApp_catalogitem`
 --
 
@@ -56,6 +143,28 @@ INSERT INTO `proposalApp_catalogitem` VALUES (1,'viteHome','Vite App + Home page
 UNLOCK TABLES;
 
 --
+-- Table structure for table `proposalApp_costtier`
+--
+
+DROP TABLE IF EXISTS `proposalApp_costtier`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `proposalApp_costtier` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `code` varchar(40) NOT NULL,
+  `label` varchar(80) NOT NULL,
+  `min_total` decimal(12,2) NOT NULL,
+  `max_total` decimal(12,2) DEFAULT NULL,
+  `notes` longtext NOT NULL,
+  `sort_order` int unsigned NOT NULL,
+  `is_active` tinyint(1) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `code` (`code`),
+  CONSTRAINT `proposalapp_costtier_chk_1` CHECK ((`sort_order` >= 0))
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Dumping data for table `proposalApp_costtier`
 --
 
@@ -64,6 +173,26 @@ LOCK TABLES `proposalApp_costtier` WRITE;
 INSERT INTO `proposalApp_costtier` VALUES (1,'tier01','Tier 1',0.00,1100.00,'',0,1),(2,'tier02','Tier 2',1100.01,1700.00,'',0,1),(3,'tier03','Tier 3',1700.01,NULL,'',0,1);
 /*!40000 ALTER TABLE `proposalApp_costtier` ENABLE KEYS */;
 UNLOCK TABLES;
+
+--
+-- Table structure for table `proposalApp_jobrate`
+--
+
+DROP TABLE IF EXISTS `proposalApp_jobrate`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `proposalApp_jobrate` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `code` varchar(40) NOT NULL,
+  `name` varchar(120) NOT NULL,
+  `hourly_rate` decimal(10,2) NOT NULL,
+  `is_active` tinyint(1) NOT NULL,
+  `sort_order` int unsigned NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `code` (`code`),
+  CONSTRAINT `proposalapp_jobrate_chk_1` CHECK ((`sort_order` >= 0))
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Dumping data for table `proposalApp_jobrate`
@@ -84,4 +213,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-10-01 13:41:00
+-- Dump completed on 2025-10-06 14:19:45

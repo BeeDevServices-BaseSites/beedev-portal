@@ -1,0 +1,109 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>{{ proposal.title }} — Proposal</title>
+    <link rel="stylesheet" href="{% static 'css/proposal-pdf.css' %}">
+  </head>
+  <body>
+    <div class="pdf-running-header">
+      <div class="hdr-left">
+        <img class="hdr-logo" src="{% static 'images/logo.png' %}" alt="Company Logo">
+      </div>
+    </div>
+    <header class="doc-header">
+      <div class="brand">
+        <h1 class="doc-title">{{ proposal.title }}</h1>
+      </div>
+      <div class="doc-meta">
+        <div><strong>Company:</strong> {{ company_name }}</div>
+        <div><strong>Date:</strong> {{ proposal_date|date:"F j, Y" }}</div>
+      </div>
+    </header>
+
+    <section class="section">
+      <h2>Quote Summary</h2>
+      <ul class="bullets">
+        <li><strong>Total:</strong> ${{ quote_total }}</li>
+        <li><strong>Domain Handling:</strong> {{ domain_text }}</li>
+        <li><strong>Hosting:</strong> {{ hosting_text }}</li>
+      </ul>
+    </section>
+
+    {% if summary_html %}
+    <section class="section">
+      <h2>Included in Proposal</h2>
+      <div class="markdown">
+        {{ summary_html|safe }}
+      </div>
+    </section>
+    {% endif %}
+
+    <section class="section">
+      <h2>Maintenance &amp; Hosting</h2>
+      <ul class="bullets">
+        <li><strong>Domain:</strong> {{ domain_text }}</li>
+        <li><strong>Hosting:</strong> {{ hosting_text }}</li>
+      </ul>
+    </section>
+
+    {% if notes_blocks %}
+    <section class="section">
+      <h2>Project Overview</h2>
+      <ul class="notes-list">
+        {% for n in notes_blocks %}
+          <li class="note-item">
+            <div class="note-subject"><strong>{{ n.subject }}</strong></div>
+            <div class="markdown">{{ n.body_html|safe }}</div>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    <section class="section">
+      <h2>Add-ons</h2>
+      <p class="muted">Additional services can be added on request.</p>
+    </section>
+
+    <section class="section">
+      <h2>Payment Details</h2>
+      <ul class="bullets">
+        <li><strong>Deposit required to begin:</strong> ${{ deposit_amount }}</li>
+        <li><strong>Remaining balance:</strong> ${{ remaining_due }}</li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2>Terms</h2>
+      <p>Proposal valid for <strong>{{ valid_days }}</strong> days (until <strong>{{ valid_until|date:"F j, Y" }}</strong>).</p>
+    </section>
+
+    <section class="section signatures">
+      <h2>Acceptance</h2>
+      <table class="sig-table">
+        <tr>
+          <td>
+            <div class="sig-line"></div>
+            <div class="sig-label">Client Signature</div>
+          </td>
+          <td>
+            <div class="sig-line"></div>
+            <div class="sig-label">Date</div>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="sig-line"></div>
+            <div class="sig-label">Company Representative</div>
+          </td>
+          <td>
+            <div class="sig-line"></div>
+            <div class="sig-label">Date</div>
+          </td>
+        </tr>
+      </table>
+    </section>
+  </body>
+</html>

@@ -347,7 +347,7 @@ class ProposalDraft(models.Model):
                 amount_applied=self.discount_amount,
                 sort_order=0,
             )
-        
+
         for n in self.notes.all().order_by("sort_order", "pk"):
             ProposalSection.objects.create(
                 proposal=prop,
@@ -355,6 +355,23 @@ class ProposalDraft(models.Model):
                 subject=n.subject,
                 body_md=n.body_md,
             )
+        
+        for idx, n in enumerate(self.notes.all().order_by("sort_order", "pk")):
+            ProposalNote.objects.create(
+                proposal=prop,
+                subject=(n.subject or "").strip(),
+                body_md=(n.body_md or "").strip(),
+                sort_order=idx,
+                is_visible_to_client=True,
+            )
+        
+        summary_text = (self.summary_md or "").strip()
+        if summary_text:
+            ProposalSummary.objects.update_or_create(
+                proposal=prop,
+                defaults={"body_md": summary_text, "is_visible_to_client": True},
+            )
+
         self.approval_status = self.ApprovalStatus.CONVERTED
         self.save(update_fields=["approval_status", "updated_at"])
         ProposalEvent.objects.create(proposal=prop, kind=ProposalEvent.Kind.CREATED, actor=actor)
@@ -628,6 +645,29 @@ class Proposal(models.Model):
 
             proj = Project.objects.create(**kwargs)
             return proj
+
+class ProposalNote(models.Model):
+    proposal = models.ForeignKey("Proposal", related_name="notes", on_delete=models.CASCADE)
+    subject = models.CharField(max_length=160, blank=True)
+    body_md = models.TextField(blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    is_visible_to_client = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ("sort_order", "pk")
+
+    def __str__(self):
+        return self.subject or f"Note #{self.pk}"
+    
+class ProposalSummary(models.Model):
+    proposal = models.OneToOneField("Proposal", related_name="summary", on_delete=models.CASCADE)
+    body_md = models.TextField(blank=True)
+    is_visible_to_client = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Summary for {self.proposal_id}"
 
 class ProposalLineItem(models.Model):
     proposal     = models.ForeignKey(Proposal, on_delete=models.CASCADE, related_name="line_items")

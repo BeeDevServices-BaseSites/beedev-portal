@@ -34,3 +34,5 @@ With Owner login
     1. make sure to add emails to each new employee you add before adding the next one, set role to position
 - Clients
     1. do not create until company is created
+
+

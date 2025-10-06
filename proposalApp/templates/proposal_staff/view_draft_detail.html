@@ -79,6 +79,12 @@
         </table>
     </div>
 {% endif %}
+{% if summary_html %}
+  <div class="detail">
+    <h3>Executive Summary</h3>
+    <div class="note-body">{{ summary_html|safe }}</div>
+  </div>
+{% endif %}
 {% if notes %}
   <div class="detail">
     <h3>Notes</h3>

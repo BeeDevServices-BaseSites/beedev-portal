@@ -22,6 +22,8 @@ from .models import (
     CostTier,
     ProposalViewer,
     ProposalSection,
+    ProposalNote,
+    ProposalSummary,
 )
 
 # -------- permission helpers --------
@@ -339,6 +341,18 @@ class ProposalSectionInline(admin.TabularInline):
     extra = 0
     fields = ("sort_order", "subject", "body_md", "is_client_visible")
     ordering = ("sort_order", "id")
+
+@admin.register(ProposalSummary)
+class ProposalSummaryAdmin(admin.ModelAdmin):
+    list_display = ("proposal", "is_visible_to_client", "updated_at")
+    list_filter = ("is_visible_to_client",)
+
+@admin.register(ProposalNote)
+class ProposalNoteAdmin(admin.ModelAdmin):
+    list_display = ("proposal", "subject", "sort_order", "is_visible_to_client")
+    list_filter = ("is_visible_to_client",)
+    search_fields = ("subject", "body_md")
+    ordering = ("proposal", "sort_order", "pk")
 
 @admin.register(Proposal)
 class ProposalAdmin(admin.ModelAdmin):
