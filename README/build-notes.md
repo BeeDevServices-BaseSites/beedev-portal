@@ -1,5 +1,9 @@
 # Build notes:
 
+# As of 10/8:
+- Styled pdf
+- Sent pdf - need to remove the attachment and leave just the link
+
 # As of 10/6:
 - Flushed DB due to model updates:
 - Created a prospect, updated prospect detail, updated status with note, converted prospect, created draft, updated draft, sent for approval, approved, converted to proposal, able to regenerate proposals as well.

@@ -1,7 +1,10 @@
 from django.contrib.auth.decorators import login_required
+from django.core.validators import validate_email
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Prefetch, Max
 from django.views.generic import TemplateView
+from django.conf import settings
+from importlib import import_module
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db import transaction
 from ..models import ProposalDraft, DraftItem, DraftNote, Proposal, ProposalLineItem, ProposalAppliedDiscount, ProposalRecipient, ProposalEvent, CatalogItem, ProposalNote, ProposalSummary
@@ -538,21 +541,48 @@ def send_proposal(request, pk: int):
         if not raw:
             messages.error(request, "Enter at least one recipient email.")
             return redirect(reverse("proposal_staff:proposal_detail", args=[proposal.pk]))
+        
+        pieces = [p.strip() for p in raw.replace(";", ",").replace(" ", ",").split(",") if p.strip()]
+        emails = []
+        for e in pieces:
+            try:
+                validate_email(e)
+                emails.append(e.lower())
+            except ValidationError:
+                pass
 
-        emails = {e.strip().lower() for e in raw.replace(";", ",").split(",") if e.strip()}
+        emails = list(dict.fromkeys(emails))
         if not emails:
             messages.error(request, "No valid emails found.")
             return redirect(reverse("proposal_staff:proposal_detail", args=[proposal.pk]))
 
         created = 0
+        made_primary = proposal.recipients.filter(is_primary=True).exists()
         for em in emails:
-            obj, was_created = ProposalRecipient.objects.get_or_create(proposal=proposal, email=em, defaults={"is_primary": True})
+            obj, was_created = ProposalRecipient.objects.get_or_create(proposal=proposal, email=em, defaults={"is_primary": not made_primary})
             if was_created:
                 created += 1
+                if not made_primary:
+                    made_primary = True
 
-        proposal.mark_sent(actor=user)
+        hook_path = getattr(settings, "PROPOSAL_MESSENGER", "")
+        try:
+            proposal.ensure_signing_link()
+            if hook_path:
+                mod_path, fn_name = hook_path.split(":") if ":" in hook_path else hook_path.rsplit(".", 1)
+                mod = __import__(mod_path, fromlist=[fn_name])
+                hook = getattr(mod, fn_name)
+                hook(proposal, emails, proposal.get_signing_url(), attach_pdf=bool(proposal.pdf))
+            else:
+                raise RuntimeError("PROPOSAL_MESSENGER not configured")
+        
+        except Exception as e:
+            messages.error(request, f"Email send failed: {e!r}")
+            return redirect(reverse("proposal_staff:proposal_detail", args=[proposal.pk]))
 
-        messages.success(request, f"Queued send to {len(emails)} recipient(s). (Added {created} new)")
+        proposal.mark_sent(actor=user, skip_messenger=True)
+
+        messages.success(request, f"Sent to {len(emails)} recipient(s). (Added {created} new)")
         return redirect(reverse("proposal_staff:proposal_detail", args=[proposal.pk]))
 
     return redirect(reverse("proposal_staff:proposal_detail", args=[proposal.pk]))

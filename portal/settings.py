@@ -1,5 +1,7 @@
-import os
+import os, certifi
 from environ import Env
+
+os.environ["SSL_CERT_FILE"] = certifi.where()
 
 env = Env(
     DEBUG=(bool, False)
@@ -141,7 +143,8 @@ BRAND_PHONE = "(845)271-7840"
 BRAND_ADDRESS = "Wappingers Falls, NY 12590"
 
 # Email Settings
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_BACKEND = 'proposalApp.email_backend.GmailEmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_USE_TLS = True
 EMAIL_PORT = 587

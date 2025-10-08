@@ -564,28 +564,29 @@ class Proposal(models.Model):
             self.ensure_signing_link()
         return f"{base}/{self.sign_token}" if base else self.sign_token
 
-    def mark_sent(self, *, actor=None, messenger_kwargs: dict | None = None):
+    def mark_sent(self, *, actor=None, messenger_kwargs: dict | None = None, skip_messenger: bool = False):
         self.ensure_signing_link()
         if not self.sent_at:
             self.sent_at = timezone.now()
         self.save(update_fields=["sent_at", "updated_at"])
 
-        hook_path = getattr(settings, "PROPOSAL_MESSENGER", "")
-        if hook_path:
-            try:
-                if ":" in hook_path:
-                    mod_path, fn_name = hook_path.split(":", 1)
-                else:
-                    mod_path, fn_name = hook_path.rsplit(".", 1)
-                mod = __import__(mod_path, fromlist=[fn_name])
-                hook = getattr(mod, fn_name)
-                emails = list(self.recipients.values_list("email", flat=True)) or []
-                hook(self, emails, self.get_signing_url(), **(messenger_kwargs or {}))
-            except Exception as e:
-                ProposalEvent.objects.create(
-                    proposal=self, kind=ProposalEvent.Kind.UPDATED, actor=actor,
-                    data={"warning": f"Messenger hook failed: {e!r}"}
-                )
+        if not skip_messenger:
+            hook_path = getattr(settings, "PROPOSAL_MESSENGER", "")
+            if hook_path:
+                try:
+                    if ":" in hook_path:
+                        mod_path, fn_name = hook_path.split(":", 1)
+                    else:
+                        mod_path, fn_name = hook_path.rsplit(".", 1)
+                    mod = __import__(mod_path, fromlist=[fn_name])
+                    hook = getattr(mod, fn_name)
+                    emails = list(self.recipients.values_list("email", flat=True)) or []
+                    hook(self, emails, self.get_signing_url(), **(messenger_kwargs or {}))
+                except Exception as e:
+                    ProposalEvent.objects.create(
+                        proposal=self, kind=ProposalEvent.Kind.UPDATED, actor=actor,
+                        data={"warning": f"Messenger hook failed: {e!r}"}
+                    )
 
         ProposalEvent.objects.create(proposal=self, kind=ProposalEvent.Kind.SENT, actor=actor)
         return self.sent_at
