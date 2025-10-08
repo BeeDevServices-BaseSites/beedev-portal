@@ -3,6 +3,8 @@ from django.contrib import admin, messages
 from django.db import transaction
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
+from django.db.models import Sum
+from decimal import Decimal
 
 from companyApp.models import CompanyMembership
 from userApp.models import User
@@ -135,10 +137,17 @@ class DraftItemInline(admin.TabularInline):
         "catalog_item",
         "name", "description", "job_rate", "base_setting",
         "hours", "quantity",
+        "line_hours_display",
         "line_total",
     )
-    readonly_fields = ("name", "description", "job_rate", "base_setting", "line_total")
+    readonly_fields = ("name", "description", "job_rate", "base_setting", "line_hours_display", "line_total")
     autocomplete_fields = ("catalog_item",)
+
+    def line_hours_display(self, obj):
+        if not obj.pk:
+            return "-"
+        return (obj.hours or 0) * (obj.quantity or 0)
+    line_hours_display.short_description = "Line Hours"
 
 class DraftNoteInline(admin.TabularInline):
     model = DraftNote
@@ -151,7 +160,7 @@ class ProposalDraftAdmin(admin.ModelAdmin):
     inlines = [DraftItemInline, DraftNoteInline]
 
     list_display = (
-        "title", "company", "currency",
+        "title", "company", "currency", "total_hours",
         "subtotal", "discount", "discount_amount",
         "total",
         "estimate_tier", "estimate_low", "estimate_high",
@@ -171,6 +180,7 @@ class ProposalDraftAdmin(admin.ModelAdmin):
         ("Discount", {"fields": ("discount", "discount_amount")}),
         ("Totals & Deposit", {
             "fields": (
+                ("total_hours",),
                 ("subtotal", "total"),
                 ("deposit_type", "deposit_value", "deposit_amount"),
                 "remaining_due",
@@ -194,6 +204,7 @@ class ProposalDraftAdmin(admin.ModelAdmin):
     )
 
     readonly_fields = (
+        "total_hours",
         "subtotal", "discount_amount", "total",
         "deposit_amount", "remaining_due",
         "estimate_low", "estimate_high",
@@ -307,10 +318,10 @@ class ProposalEventInline(admin.TabularInline):
 class ProposalLineItemInline(admin.TabularInline):
     model = ProposalLineItem
     extra = 0
-    readonly_fields = ("line_total", "unit_price", "subtotal")
+    readonly_fields = ("line_total", "unit_price", "subtotal", "line_hours")
     fields = (
         "sort_order", "name", "description",
-        "hours", "quantity", "job_rate", "base_setting",
+        "hours", "quantity", "job_rate", "base_setting", "line_hours",
         "line_total", "unit_price", "subtotal",
     )
 
@@ -366,7 +377,7 @@ class ProposalAdmin(admin.ModelAdmin):
     ]
 
     list_display = (
-        "title", "company", "contact_email", "currency",
+        "title", "company", "contact_email", "currency", "hours_subtotal", "hours_total",
         "amount_subtotal", "discount_total", "amount_tax", "amount_total",
         "deposit_type", "deposit_value", "deposit_amount",
         "remaining_due", "sent_at", "signed_at",
@@ -380,7 +391,7 @@ class ProposalAdmin(admin.ModelAdmin):
     ordering = ("-created_at",)
 
     readonly_fields = (
-        "created_at", "updated_at",
+        "hours_subtotal", "hours_total", "created_at", "updated_at",
         "sent_at", "viewed_at", "signed_at",
         "sign_token", "token_expires_at",
         "sign_link_preview",
@@ -389,6 +400,7 @@ class ProposalAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ("Header", {"fields": ("company", "created_by", "title", "currency")}),
+        ("Hours",  {"fields": (("hours_subtotal", "hours_total"),)}),
         ("Totals", {"fields": (("amount_subtotal", "discount_total", "amount_tax", "amount_total"),)}),
         ("Deposit", {"fields": (("deposit_type", "deposit_value", "deposit_amount"), "remaining_due")}),
         ("Signing", {"fields": ("sign_token", "token_expires_at", "sign_link_preview", "sent_at", "viewed_at", "signed_at")}),
@@ -409,7 +421,7 @@ class ProposalAdmin(admin.ModelAdmin):
         ("Timestamps", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
     )
 
-    actions = ["action_generate_link", "action_mark_sent", "action_mark_signed", "action_mark_countersigned", "action_make_deposit_invoice", "action_create_project"]
+    actions = ["action_generate_link", "action_mark_sent", "action_mark_signed", "action_mark_countersigned", "action_make_deposit_invoice", "action_create_project", "action_recompute_hours",]
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         field = super().formfield_for_foreignkey(db_field, request, **kwargs)
@@ -457,6 +469,26 @@ class ProposalAdmin(admin.ModelAdmin):
             pass
         return "—"
     pdf_link.short_description = "PDF"
+
+    @admin.action(description="Recompute Hours (subtotal/total)")
+    def action_recompute_hours(self, request, queryset):
+        updated = 0
+        for p in queryset:
+            # If you created ProposalLineItem.line_hours earlier, this is fast:
+            sub = p.line_items.aggregate(s=Sum("line_hours"))["s"]
+            if sub is None:
+                # fallback if line_hours isn't present:
+                sub = 0
+                for li in p.line_items.all():
+                    sub += (li.hours or 0) * (li.quantity or 0)
+
+            sub = Decimal(sub or 0)
+            tot = sub + Decimal("8.00")
+            p.hours_subtotal = sub
+            p.hours_total = tot
+            p.save(update_fields=["hours_subtotal", "hours_total"])
+            updated += 1
+        self.message_user(request, f"Recomputed hours for {updated} proposal(s).", level=messages.SUCCESS)
 
     @admin.action(description="Generate signing link")
     def action_generate_link(self, request, queryset):

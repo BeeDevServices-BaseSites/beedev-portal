@@ -98,6 +98,7 @@ def _pdf_context(proposal) -> dict:
     days_valid = (valid_until - proposal_date).days
     deposit = getattr(proposal, "deposit_amount", Decimal("0.00"))
     remaining = getattr(proposal, "remaining_due", Decimal("0.00"))
+    hours_total = getattr(proposal, "hours_total", Decimal("0.00"))
 
     return {
         "company_name": str(company),
@@ -111,6 +112,7 @@ def _pdf_context(proposal) -> dict:
         "valid_days": days_valid,
         "deposit_amount": deposit,
         "remaining_due": remaining,
+        "hours_total": hours_total,
     }
 
 def generate_proposal_pdf(

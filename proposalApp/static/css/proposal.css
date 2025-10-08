@@ -129,6 +129,21 @@ body main .detail td {
 body main .detail .blank {
   text-align: center;
 }
+body main .detail .notes .note-block {
+  margin: 0 0 0 0.5em;
+}
+body main .detail .notes .note-block .note-body {
+  margin: 0 0 0 2em;
+}
+body main .detail .notes .note-block .note-body li {
+  margin: 0.5em 0;
+}
+body main .detail .note-body {
+  margin: 0 0 0 1.5em;
+}
+body main .detail .note-body li {
+  margin: 0.5em 0;
+}
 body main form .box {
   margin-top: 1rem;
 }

@@ -54,6 +54,10 @@
             <th>Total</th>
             <td>${{draft.total}}</td>
         </tr>
+        <tr>
+            <th>Estimated Production Hours</th>
+            <td>{{draft.total_hours}}</td>
+        </tr>
     </table>
 </div>
 {% if items %}
@@ -90,8 +94,8 @@
     <h3>Notes</h3>
     <div class="notes">
       {% for n in notes %}
-        <div class="note-block" style="margin-bottom:1rem;">
-          <h4 style="margin:0 0 .25rem 0;">{{ n.subject }}</h4>
+        <div class="note-block">
+          <h4>{{ n.subject }}</h4>
           <div class="note-body">
             {{ n.body_html|safe }}
           </div>

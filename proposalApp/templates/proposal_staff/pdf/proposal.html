@@ -28,6 +28,7 @@
         <li><strong>Total:</strong> ${{ quote_total }}</li>
         <li><strong>Domain Handling:</strong> {{ domain_text }}</li>
         <li><strong>Hosting:</strong> {{ hosting_text }}</li>
+        <li><strong>Estimated Man-hours:</strong> {{ hours_total }}/business hours</li>
       </ul>
     </section>
 
@@ -54,8 +55,12 @@
       <ul class="notes-list">
         {% for n in notes_blocks %}
           <li class="note-item">
-            <div class="note-subject"><strong>{{ n.subject }}</strong></div>
-            <div class="markdown">{{ n.body_html|safe }}</div>
+            <ul class="bullets">
+              <li class="note-subject"><strong>{{ n.subject }}</strong></li>
+              <ul>
+                <li class="markdown">{{ n.body_html|safe }}</li>
+              </ul>
+            </ul>
           </li>
         {% endfor %}
       </ul>

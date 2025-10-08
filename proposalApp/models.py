@@ -10,6 +10,7 @@ from django.utils import timezone
 from django.core.validators import FileExtensionValidator
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Sum, F, ExpressionWrapper, DecimalField
 
 
 # ---------- Helpers ----------
@@ -158,6 +159,8 @@ class ProposalDraft(models.Model):
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
 
+    total_hours = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+
     deposit_type  = models.CharField(max_length=10, choices=DepositType.choices, default=DepositType.NONE)
     deposit_value = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     deposit_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
@@ -278,28 +281,42 @@ class ProposalDraft(models.Model):
         return tier
 
     def recalc_totals(self, *, save=True):
-        line_sum = Decimal("0.00")
-        for li in self.items.all():
-            line_sum += q2(li.line_total)
+        hours_expr = ExpressionWrapper(
+            F("hours") * F("quantity"),
+            output_field=DecimalField(max_digits=10, decimal_places=2)
+        )
+        agg = self.items.aggregate(
+            hours_sum=Sum(hours_expr),
+            money_sum=Sum("line_total"),
+        )
 
-        self.subtotal = q2(line_sum)
+        self.total_hours = (agg["hours_sum"] or Decimal("0.00"))
+
+        line_sum = q2(agg["money_sum"] or Decimal("0.00"))
+        self.subtotal = line_sum
         self.discount_amount = q2(self.compute_discount_amount(self.subtotal))
-
         base_total = q2(self.subtotal - self.discount_amount)
         self.total = base_total
-
         self.deposit_amount = q2(self.compute_deposit_amount(self.total))
         self.remaining_due  = q2(self.total - self.deposit_amount)
 
         if save:
-            self.save(update_fields=["subtotal", "discount_amount", "total", "deposit_amount", "remaining_due", "updated_at"])
+            self.save(update_fields=[
+                "total_hours", "subtotal", "discount_amount", "total",
+                "deposit_amount", "remaining_due", "updated_at"
+            ])
+
         self.update_estimate_from_tiers(save=True)
         return self.total
 
     @transaction.atomic
     def convert_to_proposal(self, *, actor=None):
+        self.recalc_totals(save=True)
         snap_name  = (self.contact_name or "").strip() or (self.company.primary_contact_name or "")
         snap_email = (self.contact_email or "").strip() or (self.company.primary_email or "")
+
+        hours_sub = self.total_hours or Decimal("0.00")
+        hours_tot = hours_sub + Decimal("8.00")
 
         prop = Proposal.objects.create(
             company=self.company,
@@ -317,6 +334,8 @@ class ProposalDraft(models.Model):
             converted_from=self,
             contact_name=snap_name,
             contact_email=snap_email,
+            hours_subtotal=hours_sub,
+            hours_total=hours_tot,
         )
         if self.approved_by_id and not getattr(prop, "approver_user_id", None):
             prop.approver_user_id = self.approved_by_id
@@ -335,6 +354,7 @@ class ProposalDraft(models.Model):
                 line_total=li.line_total,
                 unit_price=li.line_total,
                 subtotal=li.line_total,
+                line_hours=(li.hours or Decimal("0.00")) * (li.quantity or Decimal("0.00")),
             )
 
         if self.discount and self.discount_amount:
@@ -421,6 +441,10 @@ class DraftItem(models.Model):
 
     def __str__(self):
         return f"{self.name} · {self.draft}"
+    
+    @property
+    def line_hours(self):
+        return (self.hours or Decimal("0.00")) * (self.quantity or Decimal("0.00"))
 
     def _apply_catalog(self):
         c = self.catalog_item
@@ -475,6 +499,9 @@ class Proposal(models.Model):
 
     title       = models.CharField(max_length=200)
     currency    = models.CharField(max_length=8, default="USD")
+
+    hours_subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    hours_total    = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
 
     amount_subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     amount_tax      = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
@@ -681,6 +708,7 @@ class ProposalLineItem(models.Model):
     job_rate     = models.ForeignKey(JobRate, on_delete=models.PROTECT, related_name="proposal_items")
     base_setting = models.ForeignKey(BaseSetting, on_delete=models.PROTECT, related_name="proposal_items")
     line_total   = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    line_hours = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
 
     unit_price   = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     subtotal     = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))

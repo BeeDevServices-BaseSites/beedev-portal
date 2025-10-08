@@ -72,6 +72,12 @@ body main table tr a:hover {
   color: var(--green);
   text-decoration: underline;
 }
+body main .dash {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
 body main .list_menu {
   display: flex;
   flex-direction: column;
