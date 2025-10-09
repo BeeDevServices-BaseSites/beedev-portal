@@ -1,5 +1,8 @@
 # Build notes:
 
+# As of 10/9:
+- Styled linked proposal from email.  Email good.
+
 # As of 10/8:
 - Styled pdf
 - Sent pdf - need to remove the attachment and leave just the link

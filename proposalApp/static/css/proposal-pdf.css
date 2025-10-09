@@ -50,12 +50,34 @@
     color: #777;
   }
 }
+@media print {
+  nav,
+  .mini_menu,
+  .public-actions,
+  .footer {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+  }
+}
 * {
   box-sizing: border-box;
 }
 body {
-  font-size: 12px;
+  font-size: 15px;
   color: var(--black);
+}
+body h1,
+body h2,
+body h3 {
+  margin: 0 0 8pt;
+}
+body h2 {
+  font-size: 13pt;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 4pt;
+  margin-top: 10pt;
 }
 body .pdf-running-header {
   position: running(page-header);
@@ -69,24 +91,7 @@ body .pdf-running-header {
 body .pdf-running-header .hdr-logo {
   height: 100px;
 }
-h1,
-h2,
-h3 {
-  margin: 0 0 8pt;
-}
-h1.doc-title {
-  font-size: 18pt;
-}
-h2 {
-  font-size: 13pt;
-  border-bottom: 1px solid #ddd;
-  padding-bottom: 4pt;
-  margin-top: 10pt;
-}
-.section {
-  margin: 10pt 0 6pt;
-}
-.doc-header {
+body .doc-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
@@ -94,42 +99,82 @@ h2 {
   padding-bottom: 8pt;
   margin-bottom: 10pt;
 }
-.doc-meta div {
+body .doc-header .doc-title {
+  font-size: 18pt;
+}
+body .doc-header .doc-meta div {
   margin: 2pt 0;
 }
-.bullets {
+body .section {
+  margin: 10pt 0 6pt;
+  width: 65%;
+}
+body .section .bullets {
   margin: 0;
   padding-left: 14pt;
 }
-.bullets li {
+body .section .bullets li {
   margin: 4pt 0;
 }
-.notes-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.note-item {
-  margin: 8pt 0;
-}
-.note-subject {
+body .section .bullets .note-subject {
   margin-bottom: 2pt;
 }
-.markdown p {
+body .section .markdown p {
   margin: 4pt 0;
 }
-.markdown ul,
-.markdown ol {
+body .section .markdown ul,
+body .section .markdown ol {
   margin: 0 0 6pt 14pt;
 }
-.markdown pre {
+body .section .markdown pre {
   background: #f6f7f8;
   padding: 6pt;
   border-radius: 4pt;
   overflow: hidden;
 }
-.markdown {
+body .section .markdown {
   list-style: none;
+}
+body .section .notes-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+body .section .notes-list .note-item {
+  margin: 8pt 0;
+}
+body main .public-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1.25rem;
+}
+body main .public-actions .btn {
+  padding: 0.5rem 0.8rem;
+  border: 1px solid #222;
+  border-radius: 8px;
+  text-decoration: none;
+}
+body main .public-actions .primary {
+  background: #111;
+  color: #fff;
+}
+body main #pdf-like-root {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 85%;
+}
+body main #pdf-like-root .hdr-logo {
+  height: 100px !important;
+}
+body main #pdf-like-root .doc-header {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  justify-content: space-between;
+  width: 65%;
 }
 .muted {
   color: #666;
