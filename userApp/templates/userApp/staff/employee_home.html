@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% load page_title user_extras %}
+
+{% block content %}
+    <head>
+        <link rel="stylesheet" href="{% static 'css/user.css'%}?v={% now 'U' %}">
+    </head>
+    <h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
+
+    <div class="dash">
+        <div class="proposals">
+            <h2>Draft Proposals</h2>
+            {% if dash.drafts %}
+                {% if request.user.role == "ADMIN" or request.user.role == "OWNER" %}
+                    <h3>Needing Approval</h3>
+                    {% for d in dash.drafts %}
+                        {{d.title}} - Status: {{d.approval_status}}
+                    {% endfor %}
+                {% else %}
+                    {{d.title}} - Status: {{d.approval_status}}
+                {% endif %}
+            {% else %}
+                No Draft Proposals yet
+            {% endif %}
+            <h2>Proposals</h2>
+            {% if dash.proposals %}
+                {% for p in dash.proposals %}
+                    {{p.title}} - Status: {{p.approval_status}}
+                {% endfor %}
+            {% else %}
+                No Proposals yet
+            {% endif %}
+        </div>
+        <div class="projects">
+            <h2>Your Projects</h2>
+            {% if dash.myProjects %}
+                blabla
+            {% else %}
+                nope
+            {% endif %}
+            {% if dash.allProjects %}
+                <h2>All Projects</h2>
+                blabla
+            {% else %}
+                <h2>All Projects</h2>
+                nope
+            {% endif %}
+        </div>
+    </div>
+    
+
+{% endblock content %}

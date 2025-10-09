@@ -21,14 +21,9 @@ def _audiences_for_user(user) -> list[str]:
     return ["ALL"]
 
 def _announce_and_version(request):
-    """
-    Lazy-import announceApp so core doesn't hard-depend on it.
-    Returns (marquee_notice, marquee_list, app_version_str, version_obj)
-    """
     try:
         from announceApp.models import Announcement, Version
     except Exception:
-        # App not installed yet; safe fallbacks
         return None, [], "dev", None
 
     now = timezone.now()
@@ -56,17 +51,6 @@ def base_ctx(
     add_suffix: bool = True,
     **extra: Any
 ) -> Dict[str, Any]:
-    """
-    Reusable per-view context additions.
-    - `title`: full document title (defaults to "<title_short> - BeeDev Services")
-    - `title_short`: plain page title without suffix (safe for H1s)
-    - `site_name`: the suffix string ("BeeDev Services")
-    - NEW:
-      - `marquee_notice`: first matching Announcement for the current user/audience
-      - `marquee_list`: up to 5 current Announcements (use if you want to render multiple)
-      - `app_version`: string for footer (e.g., "0.5.2")
-      - `app_version_obj`: Version instance (gives you date_of_release/info)
-    """
     site_name = DEFAULT_SITE_SUFFIX
     title_short = (title or "").strip()
 

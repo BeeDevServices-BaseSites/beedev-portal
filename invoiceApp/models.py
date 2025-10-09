@@ -4,6 +4,8 @@ from decimal import Decimal
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+from django.contrib.auth import get_user_model
+from django.core.validators import URLValidator
 from django.core.validators import FileExtensionValidator
 from django.core.exceptions import ValidationError
 
@@ -37,49 +39,60 @@ class Invoice(models.Model):
     company         = models.ForeignKey("companyApp.Company", on_delete=models.CASCADE, related_name="invoices")
     proposal        = models.ForeignKey("proposalApp.Proposal", null=True, blank=True, on_delete=models.SET_NULL, related_name="invoices")
 
-    # >>> NEW: Tie invoice to the client user (post-signup)
+
     customer_user   = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="customer_invoices")
-    # Optional: keep reference to the contact row used pre-signup
     customer_contact = models.ForeignKey("companyApp.CompanyContact", null=True, blank=True, on_delete=models.SET_NULL, related_name="invoices")
 
-    number      = models.CharField(max_length=40, unique=True, blank=True)  # generate on save if blank
+    number      = models.CharField(max_length=40, unique=True, blank=True)
     currency    = models.CharField(max_length=8, default="USD")
     issue_date  = models.DateField(default=datetime.date.today)
     due_date    = models.DateField(null=True, blank=True)
 
-    # amounts
     subtotal       = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     discount_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     tax_total      = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     total          = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
 
-    # minimum due (deposit snapshot from proposal)
     minimum_due    = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
 
     amount_paid    = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     status         = models.CharField(max_length=10, choices=Status.choices, default=Status.DRAFT)
 
-    # optional client access token (for a public invoice view)
     view_token     = models.CharField(max_length=64, unique=True, blank=True)
 
-    # file
     pdf            = models.FileField(upload_to=invoice_pdf_upload_to, blank=True, null=True, validators=[PDF_VALIDATOR])
     created_by     = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="invoices_created")
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
+
+    allowed_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        through="InvoiceViewer",
+        related_name="invoices_shared_with",
+        blank=True,
+    )
+
+    stripe_customer_id          = models.CharField(max_length=64, blank=True, db_index=True)
+    stripe_invoice_id           = models.CharField(max_length=64, blank=True, db_index=True)
+    stripe_checkout_session_id  = models.CharField(max_length=64, blank=True, db_index=True)
+    stripe_payment_intent_id    = models.CharField(max_length=64, blank=True, db_index=True)
+    stripe_hosted_invoice_url   = models.URLField(blank=True)
+    stripe_status               = models.CharField(max_length=32, blank=True)  # e.g., 'draft','open','paid','void','uncollectible'
+
+    def __str__(self):
+        return f"Invoice {self.number} — {self.company.name}"
 
     class Meta:
         ordering = ("-created_at",)
         indexes = [
             models.Index(fields=["company", "status"]),
             models.Index(fields=["number"]),
-            models.Index(fields=["company", "customer_user"]),  # >>> helpful for client portals
+            models.Index(fields=["company", "customer_user"]),
         ]
 
     def __str__(self):
         return self.number or f"Invoice #{self.pk}"
 
-    # ---- derived amounts ----
     @property
     def balance_due(self) -> Decimal:
         return (self.total or Decimal("0.00")) - (self.amount_paid or Decimal("0.00"))
@@ -115,17 +128,8 @@ class Invoice(models.Model):
             self.number = f"INV-{base}-{str(uuid.uuid4())[:8].upper()}"
         super().save(*args, **kwargs)
 
-    # --------- factory: create invoice from a signed proposal ---------
     @classmethod
     def from_proposal(cls, proposal, *, created_by=None, due_date=None, customer_user=None):
-        """
-        Build an invoice including:
-        - All proposal line items
-        - Snapshot of applied discounts
-        - minimum_due from proposal.deposit_amount
-        - Link to the client user (prefer explicit customer_user, otherwise proposal.contact.user)
-        """
-        # Prefer explicit user; else try proposal.contact.user; else leave null (can backfill later).
         if customer_user is None and getattr(proposal, "contact", None):
             customer_user = getattr(proposal.contact, "user", None)
 
@@ -139,9 +143,8 @@ class Invoice(models.Model):
             minimum_due=proposal.deposit_amount or Decimal("0.00"),
             tax_total=proposal.amount_tax or Decimal("0.00"),
             created_by=created_by,
-            status=cls.Status.SENT,  # commonly sent immediately after signing
+            status=cls.Status.SENT,
         )
-        # copy line items
         for li in proposal.line_items.all().order_by("sort_order", "pk"):
             InvoiceLineItem.objects.create(
                 invoice=inv,
@@ -152,7 +155,6 @@ class Invoice(models.Model):
                 unit_price=li.unit_price,
                 subtotal=li.subtotal,
             )
-        # copy discounts
         for ad in proposal.applied_discounts.all().order_by("sort_order", "id"):
             InvoiceAppliedDiscount.objects.create(
                 invoice=inv,
@@ -204,23 +206,31 @@ class InvoiceAppliedDiscount(models.Model):
 # =======================================================================
 class Payment(models.Model):
     class Method(models.TextChoices):
-        CARD  = "CARD",  "Card"
-        ACH   = "ACH",   "ACH / Bank"
-        CHECK = "CHECK", "Check"
-        CASH  = "CASH",  "Cash"
-        OTHER = "OTHER", "Other"
+        CARD   = "CARD",   "Card"
+        ACH    = "ACH",    "ACH / Bank"
+        CHECK  = "CHECK",  "Check"
+        CASH   = "CASH",   "Cash"
+        STRIPE = "STRIPE", "Stripe"
+        OTHER  = "OTHER",  "Other"
 
     invoice     = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="payments")
     amount      = models.DecimalField(max_digits=12, decimal_places=2)
     method      = models.CharField(max_length=10, choices=Method.choices, default=Method.CARD)
-    reference   = models.CharField(max_length=120, blank=True)  # gateway id, check no, etc.
+    reference   = models.CharField(max_length=120, blank=True)
 
-    # >>> NEW: who paid (client user), if known
     payer_user  = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="payments_made")
 
     received_at = models.DateTimeField(default=timezone.now)
     notes       = models.TextField(blank=True)
     created_by  = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="payments_recorded")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    stripe_payment_intent_id   = models.CharField(max_length=64, blank=True, db_index=True)
+    stripe_charge_id           = models.CharField(max_length=64, blank=True, db_index=True)
+    stripe_payment_method_id   = models.CharField(max_length=64, blank=True, db_index=True)
+    stripe_receipt_url         = models.URLField(blank=True)
+    gateway_payload            = models.JSONField(blank=True, default=dict)
+    gateway_status             = models.CharField(max_length=32, blank=True)
 
     created_at  = models.DateTimeField(auto_now_add=True)
 
@@ -232,5 +242,15 @@ class Payment(models.Model):
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-        # After saving a payment, refresh invoice totals/status
         self.invoice.refresh_status_from_payments(save=True)
+
+class InvoiceViewer(models.Model):
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="allowed_viewers")
+    user    = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="allowed_invoices")
+
+    class Meta:
+        unique_together = [("invoice", "user")]
+        indexes = [models.Index(fields=["invoice", "user"])]
+
+    def __str__(self):
+        return f"{self.user} can view {self.invoice}"

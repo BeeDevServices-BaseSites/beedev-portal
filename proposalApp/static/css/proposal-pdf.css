@@ -1,0 +1,158 @@
+:root {
+  --yellow: #F2DB1A;
+  --black: #000000;
+  --background: #F7F6F0;
+  --white: #F5F5F5;
+  --green: #426e54;
+  --yb_border: linear-gradient(5deg, #000000 25%, #f2db1a 75%);
+  --muted: #656363;
+  --white-shadow: #FAFAFA;
+  --altmuted: #908d8d;
+  --yellow-shadow: #f2dc1abd;
+  --red: #B91C1C;
+  --alt_green: #9FC6Af;
+  --grey: #aeacac;
+  --alt_grey: #8c8c8c;
+}
+* {
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+  font-family: 'Source Sans Pro', sans-serif;
+  font-display: swap;
+}
+.flexrow {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+.flexcolumn {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.yb-border {
+  border: 4px groove transparent;
+  border-image: var(--yb_border);
+  border-image-slice: 1;
+}
+@page {
+  size: A4;
+  margin: 100pt 32pt 36pt 32pt;
+  @top-center {
+    content: element(page-header);
+  }
+  @bottom-center {
+    content: "Page " counter(page) " of " counter(pages);
+    font-size: 10px;
+    color: #777;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  font-size: 12px;
+  color: var(--black);
+}
+body .pdf-running-header {
+  position: running(page-header);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12pt;
+  padding: 8pt 0;
+  margin: 1em;
+}
+body .pdf-running-header .hdr-logo {
+  height: 100px;
+}
+h1,
+h2,
+h3 {
+  margin: 0 0 8pt;
+}
+h1.doc-title {
+  font-size: 18pt;
+}
+h2 {
+  font-size: 13pt;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 4pt;
+  margin-top: 10pt;
+}
+.section {
+  margin: 10pt 0 6pt;
+}
+.doc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  border-bottom: 2px solid #000;
+  padding-bottom: 8pt;
+  margin-bottom: 10pt;
+}
+.doc-meta div {
+  margin: 2pt 0;
+}
+.bullets {
+  margin: 0;
+  padding-left: 14pt;
+}
+.bullets li {
+  margin: 4pt 0;
+}
+.notes-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.note-item {
+  margin: 8pt 0;
+}
+.note-subject {
+  margin-bottom: 2pt;
+}
+.markdown p {
+  margin: 4pt 0;
+}
+.markdown ul,
+.markdown ol {
+  margin: 0 0 6pt 14pt;
+}
+.markdown pre {
+  background: #f6f7f8;
+  padding: 6pt;
+  border-radius: 4pt;
+  overflow: hidden;
+}
+.markdown {
+  list-style: none;
+}
+.muted {
+  color: #666;
+}
+.signatures {
+  page-break-inside: avoid;
+  margin-top: 14pt;
+}
+.sig-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.sig-table td {
+  width: 50%;
+  padding: 12pt 10pt 0 0;
+  vertical-align: bottom;
+}
+.sig-line {
+  border-bottom: 1px solid #333;
+  height: 18pt;
+}
+.sig-label {
+  font-size: 9pt;
+  color: #555;
+  margin-top: 3pt;
+}

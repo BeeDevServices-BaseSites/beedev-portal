@@ -38,7 +38,6 @@ def convert_to_company(modeladmin, request, queryset):
             try:
                 name = _best_company_name(p)
 
-                # Try to find an existing Company by name/website/email
                 c = (
                     Company.objects.filter(name__iexact=name).first()
                     or (Company.objects.filter(website__iexact=_normalize(p.website_url)).first() if p.website_url else None)
@@ -46,7 +45,6 @@ def convert_to_company(modeladmin, request, queryset):
                 )
 
                 if c is None:
-                    # Create a new Company populated from Prospect
                     c = Company.objects.create(
                         name=name,
                         website=p.website_url or "",
@@ -68,7 +66,6 @@ def convert_to_company(modeladmin, request, queryset):
                     )
                     created += 1
                 else:
-                    # Light update/merge if fields are empty on Company
                     dirty = False
                     if not c.website and p.website_url:
                         c.website, dirty = p.website_url, True
@@ -95,7 +92,6 @@ def convert_to_company(modeladmin, request, queryset):
                         c.save()
                         updated += 1
 
-                # Ensure a primary CompanyContact
                 if p.email:
                     contact, created_contact = CompanyContact.objects.get_or_create(
                         company=c,
@@ -122,7 +118,6 @@ def convert_to_company(modeladmin, request, queryset):
                             contact.save()
                             contact_upd += 1
 
-                # Mark prospect converted
                 p.status = Prospect.Status.WON
                 p.save(update_fields=["status", "updated_at"])
 

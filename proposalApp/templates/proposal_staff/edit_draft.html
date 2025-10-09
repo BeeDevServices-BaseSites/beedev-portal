@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% load page_title user_extras %}
+
+{% block content %}
+  <head>
+    <link rel="stylesheet" href="{% static 'css/proposal.css'%}?v={% now 'U' %}">
+  </head>
+  <h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
+
+  <form method="post" action="">
+  {% csrf_token %}
+
+  <fieldset class="card">
+    <legend>Draft Header</legend>
+    <div class="grid">
+      <div>{{ form.company.label_tag }} {{ form.company }}</div>
+      <div>{{ form.title.label_tag }} {{ form.title }}</div>
+      <div>{{ form.currency.label_tag }} {{ form.currency }}</div>
+      <div>{{ form.discount.label_tag }} {{ form.discount }}</div>
+      <div>{{ form.contact_name.label_tag }} {{ form.contact_name }}</div>
+      <div>{{ form.contact_email.label_tag }} {{ form.contact_email }}</div>
+    </div>
+    {% if form.non_field_errors %}<div class="errors">{{ form.non_field_errors }}</div>{% endif %}
+    {% for field in form %}
+      {% if field.errors %}
+        <div class="errors"><strong>{{ field.label }}:</strong> {{ field.errors|join:", " }}</div>
+      {% endif %}
+    {% endfor %}
+  </fieldset>
+
+  <fieldset class="box">
+  <legend>Catalog Items</legend>
+
+  <table class="entry">
+    <thead>
+      <tr>
+        <th style="width:2rem;"></th>
+        <th>Item</th>
+        <th>Hours</th>
+        <th>Qty</th>
+        <th style="text-align:right;">Line Total</th>
+      </tr>
+    </thead>
+    <tbody id="catalog-rows">
+      {% for ci in catalog_items %}
+        <tr class="catalog-row"
+            data-hourly="{{ ci.hourly }}"
+            data-base="{{ ci.base }}">
+          <td>
+            <input type="checkbox"
+                   class="js-select"
+                   name="item-{{ ci.id }}-checked"
+                   {% if ci.is_added %}checked{% endif %}>
+          </td>
+          <td>
+            <div><strong>{{ ci.name }}</strong></div>
+            {% if ci.description %}<div class="muted" style="font-size:.9em;">{{ ci.description }}</div>{% endif %}
+          </td>
+          <td>
+            <input type="number" class="js-hours"
+                   name="items-{{ ci.id }}-hours"
+                   step="0.25" min="0"
+                   value="{{ ci.hours }}">
+          </td>
+          <td>
+            <input type="number" class="js-qty"
+                   name="items-{{ ci.id }}-qty"
+                   step="1" min="0"
+                   value="{{ ci.quantity }}">
+          </td>
+          <td class="line-total" style="text-align:right;">—</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5">No catalog items yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div style="text-align:right;margin-top:.5rem;">
+    <strong>Estimated total:</strong>
+    <span id="draft-grand-total">$0.00</span>
+  </div>
+</fieldset>
+
+<fieldset class="box">
+  <legend>Executive Summary</legend>
+  <div>
+    <label for="{{ form.summary_md.id_for_label }}">{{ form.summary_md.label }}</label>
+    {{ form.summary_md }}
+    {% if form.summary_md.errors %}
+      <div class="field-errors">{% for e in form.summary_md.errors %}<p>{{ e }}</p>{% endfor %}</div>
+    {% endif %}
+    <p class="help">This is the one-page summary clients will see first.</p>
+  </div>
+</fieldset>
+
+  <fieldset class="card">
+    <legend>Notes</legend>
+
+    {{ notes_fs.management_form }}
+
+    {# SHOW formset-level errors (e.g., bad TOTAL_FORMS/INITIAL_FORMS) #}
+  {% if notes_fs.non_form_errors %}
+    <div class="form-errors">
+      {% for e in notes_fs.non_form_errors %}<p>{{ e }}</p>{% endfor %}
+    </div>
+  {% endif %}
+
+  {# SHOW management_form errors (this is the common culprit) #}
+  {% if notes_fs.management_form.errors %}
+    <div class="form-errors">
+      {% for name,errs in notes_fs.management_form.errors.items %}
+        {% for e in errs %}<p>{{ name }}: {{ e }}</p>{% endfor %}
+      {% endfor %}
+    </div>
+  {% endif %}
+
+    {% for f in notes_fs %}
+    {% for hidden in f.hidden_fields %}{{ hidden }}{% endfor %}
+      <div class="note-row">
+        <div>{{ f.subject.label_tag }} {{ f.subject }}</div>
+        <div>{{ f.sort_order.label_tag }} {{ f.sort_order }}</div>
+        <div>{{ f.body_md.label_tag }} {{ f.body_md }}</div>
+        {% if notes_fs.can_delete %}
+          <div class="delete">{{ f.DELETE }} <label for="{{ f.DELETE.id_for_label }}">Delete</label></div>
+        {% endif %}
+        {% if f.non_field_errors %}
+          <div class="errors">{{ f.non_field_errors }}</div>
+        {% endif %}
+      </div>
+      <hr>
+    {% empty %}
+      <p>No notes yet.</p>
+    {% endfor %}
+
+    <template id="note-empty-template">
+  {# NEW: include hidden fields for the empty form (has __prefix__) #}
+  {% for hidden in notes_fs.empty_form.hidden_fields %}{{ hidden }}{% endfor %}
+
+  <div class="note-row">
+    <div>{{ notes_fs.empty_form.subject.label_tag }} {{ notes_fs.empty_form.subject }}</div>
+    <div>{{ notes_fs.empty_form.sort_order.label_tag }} {{ notes_fs.empty_form.sort_order }}</div>
+    <div>{{ notes_fs.empty_form.body_md.label_tag }} {{ notes_fs.empty_form.body_md }}</div>
+    {% if notes_fs.can_delete %}
+      <div class="delete">{{ notes_fs.empty_form.DELETE }} <label for="{{ notes_fs.empty_form.DELETE.id_for_label }}">Delete</label></div>
+    {% endif %}
+  </div>
+  <hr>
+</template>
+
+    <button type="button" id="add-note">Add another note</button>
+  </fieldset>
+
+  <div class="actions">
+    <a href="{% url 'proposal_staff:draft_detail' draft.pk %}" class="btn">Cancel</a>
+    <button type="submit" class="btn btn-primary">Save changes</button>
+  </div>
+</form>
+
+<script src="{% static 'js/draft.js' %}" defer></script>
+<script src="{% static 'js/draft-form.js' %}" defer></script>
+<script src="{% static 'js/add_draft.js' %}" defer></script>
+
+{% endblock content %}

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% load page_title user_extras %}
+
+{% block content %}
+  <head>
+    <link rel="stylesheet" href="{% static 'css/prospect.css'%}?v={% now 'U' %}">
+  </head>
+  <h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
+  <div class="mini_menu">
+        <h2><a href="{% url 'userApp:employee_home' %}">Dashboard</a></h2>
+        <h2><a href="{% url 'userApp:view_all_clients' %}">Client Admin</a></h2>
+    </div>
+    <div class="mini_menu">
+        <h2><a href="{% url 'prospects:view_one_prospect' prospect.pk %}">Back to detail</a></h2>
+        <h2><a href="{% url 'prospects:prospect_edit' prospect.pk %}">Update Details</a></h2>
+    </div>
+
+<form method="post">
+  {% csrf_token %}
+  {{ form.non_field_errors }}
+
+  <fieldset class="box">
+    <legend>Status</legend>
+    <div>
+      <label>Status</label>
+      {{ form.status }}
+    </div>
+  </fieldset>
+
+  <fieldset class="box" style="margin-top:1rem;">
+    <legend>Schedule</legend>
+    <div class="grid">
+      <div>
+        <label>Last contacted</label>
+        {{ form.last_contacted_at }}
+      </div>
+      <div>
+        <label>Next follow-up</label>
+        {{ form.next_follow_up_at }}
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset class="box" style="margin-top:1rem;">
+    <legend>Summary notes (short)</legend>
+    {{ form.notes }}
+    <p class="help">This is a brief summary. Use the log below for running history.</p>
+  </fieldset>
+
+  <fieldset class="box" style="margin-top:1rem;">
+    <legend>Add note to history</legend>
+    {{ note_form.non_field_errors }}
+    <div>
+      <label>Subject</label>
+      {{ note_form.subject }}
+    </div>
+    <div style="margin-top:.5rem;">
+      <label>Details (Markdown)</label><br>
+      {{ note_form.body_md }}
+    </div>
+    <label style="display:inline-flex;gap:.5rem;margin-top:.5rem;">
+      {{ note_form.is_pinned }} Pin this note
+    </label>
+  </fieldset>
+
+  <div style="margin-top:1rem;">
+    <button type="submit" class="btn">Save</button>
+  </div>
+</form>
+
+
+{% endblock content %}

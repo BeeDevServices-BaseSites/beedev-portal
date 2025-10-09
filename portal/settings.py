@@ -1,5 +1,7 @@
-import os
+import os, certifi
 from environ import Env
+
+os.environ["SSL_CERT_FILE"] = certifi.where()
 
 env = Env(
     DEBUG=(bool, False)
@@ -46,7 +48,6 @@ INSTALLED_APPS = [
     'prospectApp.apps.ProspectappConfig',
     'announceApp.apps.AnnounceappConfig',
     'core.apps.CoreConfig',
-    # Only load browser reload in dev (optional but recommended)
     *(['django_browser_reload'] if env.bool('DEBUG', default=False) else []),
 ]
 
@@ -59,13 +60,11 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    # only in dev
     *( ['django_browser_reload.middleware.BrowserReloadMiddleware'] if env.bool('DEBUG', default=False) else [] ),
 ]
 
 ROOT_URLCONF = 'portal.urls'
 
-# -------- Templates: allow project-level overrides (admin/login.html etc.) --------
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -78,6 +77,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'django.template.context_processors.static',
                 'core.context_processors.beedev_defaults',
+                'core.context_processors.branding',
             ],
         },
     },
@@ -86,16 +86,8 @@ TEMPLATES = [
 WSGI_APPLICATION = 'portal.wsgi.application'
 
 
-# Database
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
-#     }
-# }
 DATABASES = {
     'default': {
-        # 'ENGINE': 'mysql.connector.django',
         'ENGINE': 'django.db.backends.mysql',
         'NAME': env('DB_NAME'),
         'USER': env('DB_USER'),
@@ -129,13 +121,37 @@ LOGIN_REDIRECT_URL = 'userApp:post_login'
 # LOGOUT_REDIRECT_URL = 'https://beedev-services.com/'
 LOGOUT_REDIRECT_URL = '/'
 PROSPECTS_CLIENT_MODEL = "companyApp.Company"
+
 # Base URL of your future signing page (view will look up Proposal by token)
-# PROPOSAL_SIGNING_URL_BASE = "https://portal.example.com/sign"
+# PROPOSAL_SIGNING_URL_BASE = "https://portal.bedev-services.com/p"
+PROPOSAL_SIGNING_URL_BASE = "http://127.0.0.1:8000/p"
+PROPOSAL_MESSENGER = "proposalApp.messenger:send_proposal"
+
 # Dotted-callables (set now or later)
 PROPOSAL_ACCOUNT_CREATOR = "proposalApp.hooks:create_account_for_signed_proposal"
 PROPOSAL_INVOICE_CREATOR = "proposalApp.hooks:create_invoice_for_deposit"
 PROPOSAL_MESSENGER       = "proposalApp.hooks:send_proposal_email"
 
+# Branding for PDFs (and other templates)
+BRAND_NAME = "BeeDev Services"
+BRAND_LOGO_STATIC = "images/altLogo.png"
+BRAND_TAGLINE = "Your Vision, Hive Crafted"
+BRAND_FAVICON = "images/favicon.png"
+BRAND_WEBSITE = "https://beedev-serices.com"
+BRAND_EMAIL = "developers@beedev-services.com"
+BRAND_PHONE = "(845)271-7840"
+BRAND_ADDRESS = "Wappingers Falls, NY 12590"
+
+# Email Settings
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_BACKEND = 'proposalApp.email_backend.GmailEmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_USE_TLS = True
+EMAIL_PORT = 587
+EMAIL_HOST_USER = env('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
+EMAIL_TIMEOUT = 20
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'

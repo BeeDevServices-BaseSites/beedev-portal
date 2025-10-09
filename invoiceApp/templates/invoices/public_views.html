@@ -1,0 +1,30 @@
+{% load static %}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{{ proposal.title }} — Proposal</title>
+  <link rel="stylesheet" href="{% static 'css/proposal-public.css' %}">
+</head>
+<body>
+  <header>
+    <h1>{{ proposal.title }}</h1>
+    <div>{{ proposal.company.name }}</div>
+    <div>Total: {{ proposal.amount_total }}</div>
+    <p><a href="{% url 'proposal_public:pdf' proposal.sign_token %}" target="_blank" rel="noopener">Open PDF</a></p>
+  </header>
+
+  <section>
+    <h2>Summary</h2>
+    <ul>
+      {% for it in items %}
+        <li>{{ it.name }} — {{ it.line_total }}</li>
+      {% empty %}
+        <li>No line items</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <!-- later: add a Sign button that posts to a /sign/ endpoint -->
+</body>
+</html>

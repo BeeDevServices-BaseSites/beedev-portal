@@ -1,6 +1,6 @@
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from ..models import ClientProfile, EmployeeProfile
 from core.utils.context import base_ctx
 
@@ -9,11 +9,13 @@ def view_client_profile(request):
     user = request.user
     if getattr(user, 'role', None) != user.Roles.CLIENT:
         raise PermissionDenied("This page is for clients only")
-    profile, _ = ClientProfile.objects.get_or_create(user=user)
+    profile, _ = ClientProfile.objects.select_related("company").get_or_create(user=user)
+    company = profile.company
     title = f"{user.preferred_name} Profile"
     ctx = {
         "user_obj": user,
         "profile": profile,
+        "company": company,
     }
 
     ctx.update(base_ctx(request, title=title))
@@ -40,4 +42,4 @@ def view_employee_profile(request):
     ctx = {"user_obj": user, "profile": profile, "read_only": True}
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title
-    return render(request, "userApp/view_employee_profile.html", ctx)
+    return render(request, "userApp/staff/view_employee_profile.html", ctx)

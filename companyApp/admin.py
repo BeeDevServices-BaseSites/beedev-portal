@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
 from django.utils.html import format_html
 
-from .models import Company, CompanyContact, CompanyLink
+from .models import Company, CompanyContact, CompanyLink, CompanyMembership
 
 
 # -------- permission helpers --------
@@ -25,6 +25,37 @@ def is_plain_staff(u):
 
 
 # -------- Inlines --------
+class CompanyMembershipInline(admin.TabularInline):
+    model = CompanyMembership
+    extra = 0
+    autocomplete_fields = ("user",)
+    fields = (
+        "user", "role",
+        "can_view_proposals", "can_view_invoices", "can_open_tickets",
+        "is_active", "added_at",
+    )
+    readonly_fields = ("added_at",)
+
+    def has_add_permission(self, request, obj):
+        return is_owner(request.user) or is_admin(request.user)
+
+    def has_change_permission(self, request, obj=None):
+        return is_owner(request.user) or is_admin(request.user)
+
+    def has_delete_permission(self, request, obj=None):
+        return is_owner(request.user) or is_admin(request.user)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        field = super().formfield_for_foreignkey(db_field, request, **kwargs)
+        if db_field.name == "user":
+            try:
+                from userApp.models import User
+                field.queryset = field.queryset.filter(role=User.Roles.CLIENT)
+            except Exception:
+                pass
+        return field
+
+
 class CompanyContactInline(admin.TabularInline):
     model = CompanyContact
     extra = 0
@@ -40,6 +71,16 @@ class CompanyContactInline(admin.TabularInline):
 
     def has_delete_permission(self, request, obj=None):
         return is_owner(request.user) or is_admin(request.user)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        field = super().formfield_for_foreignkey(db_field, request, **kwargs)
+        if db_field.name == "user":
+            try:
+                from userApp.models import User
+                field.queryset = field.queryset.filter(role=User.Roles.CLIENT)
+            except Exception:
+                pass
+        return field
 
 
 class CompanyLinkInline(admin.TabularInline):
@@ -62,7 +103,6 @@ class CompanyLinkInline(admin.TabularInline):
         return is_owner(request.user) or is_admin(request.user)
 
 
-# -------- Company form with "Use HTTPS" checkbox --------
 class CompanyAdminForm(forms.ModelForm):
     use_https = forms.BooleanField(
         required=False,
@@ -70,7 +110,6 @@ class CompanyAdminForm(forms.ModelForm):
         label="Use HTTPS for Website",
         help_text="If checked, the website will be stored with https://; if unchecked, http://",
     )
-    # CharField to allow inputs without scheme (e.g., 'example.com')
     website = forms.CharField(required=False, label="Website")
 
     class Meta:
@@ -79,7 +118,6 @@ class CompanyAdminForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # initialize checkbox based on existing company website
         if self.instance and self.instance.pk and self.instance.website:
             self.fields["use_https"].initial = urlparse(self.instance.website).scheme == "https"
 
@@ -96,13 +134,11 @@ class CompanyAdminForm(forms.ModelForm):
         p = urlparse(raw)
 
         if not p.scheme:
-            # "example.com[/path]" -> add scheme
             netloc, sep, path = raw.partition("/")
             if path and not path.startswith("/"):
                 path = "/" + path
             final = f"{scheme}://{netloc}{path}"
         else:
-            # swap scheme, keep rest
             p = p._replace(scheme=scheme)
             final = urlunparse(p)
 
@@ -134,7 +170,7 @@ class CompanyAdmin(admin.ModelAdmin):
     search_fields = ("name", "primary_contact_name", "primary_email", "phone", "city", "state_region", "postal_code", "website")
     ordering = ("name",)
     prepopulated_fields = {"slug": ("name",)}
-    inlines = [CompanyContactInline, CompanyLinkInline]
+    inlines = [CompanyMembershipInline, CompanyContactInline, CompanyLinkInline]
 
     fieldsets = (
         ("Identity", {
@@ -161,7 +197,17 @@ class CompanyAdmin(admin.ModelAdmin):
     )
     readonly_fields = ("logo_preview", "created_at", "updated_at")
 
-    # ----- logo preview -----
+    actions = [
+        "grant_invoice_access_all",
+        "revoke_invoice_access_all",
+        "grant_proposal_access_all",
+        "revoke_proposal_access_all",
+        "enable_ticket_opening_all",
+        "disable_ticket_opening_all",
+        "reset_visibility_to_defaults",
+        "grant_invoice_access_billing_only",
+    ]
+
     def logo_preview(self, obj):
         if obj and (obj.logo or obj.logo_external_url):
             url = obj.logo.url if obj.logo else obj.logo_external_url
@@ -176,7 +222,6 @@ class CompanyAdmin(admin.ModelAdmin):
         return "—"
     logo_thumb.short_description = ""
 
-    # ----- permissions -----
     def has_module_permission(self, request):
         if is_hr(request.user) or not request.user.is_staff:
             return False
@@ -186,27 +231,98 @@ class CompanyAdmin(admin.ModelAdmin):
         return self.has_module_permission(request)
 
     def has_add_permission(self, request):
-        # Only Owner/Admin can create Companies
         return is_owner(request.user) or is_admin(request.user)
 
     def has_change_permission(self, request, obj=None):
-        # Owner/Admin can change; HR can change; plain staff read-only
         if is_owner(request.user) or is_admin(request.user):
             return True
         return False
 
     def has_delete_permission(self, request, obj=None):
-        # Only Owner/Admin can delete Companies
         return is_owner(request.user) or is_admin(request.user)
 
-    # Set created_by on first save
     def save_model(self, request, obj, form, change):
         if not change and not obj.created_by_id:
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
 
+    @admin.action(description="Grant invoice access to ALL company members")
+    def grant_invoice_access_all(self, request, queryset):
+        from .models import CompanyMembership
+        total = 0
+        for c in queryset:
+            total += CompanyMembership.objects.filter(company=c, is_active=True)\
+                .update(can_view_invoices=True)
+        self.message_user(request, f"Granted invoice access on {total} membership(s).")
 
-# -------- Standalone admins (optional if you want to manage outside the Company page) --------
+    @admin.action(description="Revoke invoice access from ALL company members")
+    def revoke_invoice_access_all(self, request, queryset):
+        from .models import CompanyMembership
+        total = 0
+        for c in queryset:
+            total += CompanyMembership.objects.filter(company=c, is_active=True)\
+                .update(can_view_invoices=False)
+        self.message_user(request, f"Revoked invoice access on {total} membership(s).")
+
+    @admin.action(description="Grant proposal access to ALL company members")
+    def grant_proposal_access_all(self, request, queryset):
+        from .models import CompanyMembership
+        total = 0
+        for c in queryset:
+            total += CompanyMembership.objects.filter(company=c, is_active=True)\
+                .update(can_view_proposals=True)
+        self.message_user(request, f"Granted proposal access on {total} membership(s).")
+
+    @admin.action(description="Revoke proposal access from ALL company members")
+    def revoke_proposal_access_all(self, request, queryset):
+        from .models import CompanyMembership
+        total = 0
+        for c in queryset:
+            total += CompanyMembership.objects.filter(company=c, is_active=True)\
+                .update(can_view_proposals=False)
+        self.message_user(request, f"Revoked proposal access on {total} membership(s).")
+
+    @admin.action(description="Enable ticket opening for ALL company members")
+    def enable_ticket_opening_all(self, request, queryset):
+        from .models import CompanyMembership
+        total = 0
+        for c in queryset:
+            total += CompanyMembership.objects.filter(company=c, is_active=True)\
+                .update(can_open_tickets=True)
+        self.message_user(request, f"Enabled ticket opening on {total} membership(s).")
+
+    @admin.action(description="Disable ticket opening for ALL company members")
+    def disable_ticket_opening_all(self, request, queryset):
+        from .models import CompanyMembership
+        total = 0
+        for c in queryset:
+            total += CompanyMembership.objects.filter(company=c, is_active=True)\
+                .update(can_open_tickets=False)
+        self.message_user(request, f"Disabled ticket opening on {total} membership(s).")
+
+    @admin.action(description="Reset member visibility to defaults (props❌, invoices❌, tickets✅)")
+    def reset_visibility_to_defaults(self, request, queryset):
+        from .models import CompanyMembership
+        total = 0
+        for c in queryset:
+            total += CompanyMembership.objects.filter(company=c, is_active=True).update(
+                can_view_proposals=False,
+                can_view_invoices=False,
+                can_open_tickets=True,
+            )
+        self.message_user(request, f"Reset visibility flags on {total} membership(s).")
+
+    @admin.action(description="Grant invoice access to BILLING_ONLY members")
+    def grant_invoice_access_billing_only(self, request, queryset):
+        from .models import CompanyMembership
+        total = 0
+        for c in queryset:
+            total += CompanyMembership.objects.filter(
+                company=c, is_active=True, role=CompanyMembership.Role.BILLING_ONLY
+            ).update(can_view_invoices=True)
+        self.message_user(request, f"Granted invoice access on {total} BILLING_ONLY membership(s).")
+
+
 @admin.register(CompanyContact)
 class CompanyContactAdmin(admin.ModelAdmin):
     list_display = ("company", "is_primary", "name", "title", "email", "phone", "updated_at")

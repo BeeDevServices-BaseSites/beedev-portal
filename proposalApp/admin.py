@@ -3,7 +3,11 @@ from django.contrib import admin, messages
 from django.db import transaction
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
+from django.db.models import Sum
+from decimal import Decimal
 
+from companyApp.models import CompanyMembership
+from userApp.models import User
 from .models import (
     JobRate,
     BaseSetting,
@@ -11,12 +15,17 @@ from .models import (
     CatalogItem,
     ProposalDraft,
     DraftItem,
+    DraftNote,
     Proposal,
     ProposalLineItem,
     ProposalAppliedDiscount,
     ProposalRecipient,
     ProposalEvent,
     CostTier,
+    ProposalViewer,
+    ProposalSection,
+    ProposalNote,
+    ProposalSummary,
 )
 
 # -------- permission helpers --------
@@ -43,18 +52,11 @@ class JobRateAdmin(admin.ModelAdmin):
     search_fields = ("name", "code")
     ordering = ("sort_order", "name")
 
-    # ----- permissions -----    
     def has_view_permission(self, request, obj=None):
         return is_owner(request.user) or is_admin(request.user)
-
-    def has_add_permission(self, request):
-        return is_owner(request.user) or is_admin(request.user)
-    
-    def has_change_permission(self, request, obj=None):
-        return is_owner(request.user) or is_admin(request.user)
-
-    def has_delete_permission(self, request, obj=None):
-        return is_owner(request.user) or is_admin(request.user)
+    def has_add_permission(self, request): return is_owner(request.user) or is_admin(request.user)
+    def has_change_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
+    def has_delete_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
 
 
 @admin.register(BaseSetting)
@@ -64,18 +66,11 @@ class BaseSettingAdmin(admin.ModelAdmin):
     search_fields = ("name", "code")
     ordering = ("sort_order", "name")
 
-    # ----- permissions -----
     def has_view_permission(self, request, obj=None):
         return is_owner(request.user) or is_admin(request.user)
-
-    def has_add_permission(self, request):
-        return is_owner(request.user) or is_admin(request.user)
-    
-    def has_change_permission(self, request, obj=None):
-        return is_owner(request.user) or is_admin(request.user)
-
-    def has_delete_permission(self, request, obj=None):
-        return is_owner(request.user) or is_admin(request.user)
+    def has_add_permission(self, request): return is_owner(request.user) or is_admin(request.user)
+    def has_change_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
+    def has_delete_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
 
 
 @admin.register(Discount)
@@ -85,25 +80,14 @@ class DiscountAdmin(admin.ModelAdmin):
     search_fields = ("name", "code")
     ordering = ("code",)
 
-    # ----- permissions -----
     def has_module_permission(self, request):
         if is_hr(request.user) or not request.user.is_staff:
             return False
         return True
-    
-    def has_view_permission(self, request, obj=None):
-        return self.has_module_permission(request)
-
-    def has_add_permission(self, request):
-        return is_owner(request.user) or is_admin(request.user)
-    
-    def has_change_permission(self, request, obj=None):
-        if is_owner(request.user) or is_admin(request.user):
-            return True
-        return False
-
-    def has_delete_permission(self, request, obj=None):
-        return is_owner(request.user) or is_admin(request.user)
+    def has_view_permission(self, request, obj=None): return self.has_module_permission(request)
+    def has_add_permission(self, request): return is_owner(request.user) or is_admin(request.user)
+    def has_change_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
+    def has_delete_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
 
 
 @admin.register(CatalogItem)
@@ -114,25 +98,15 @@ class CatalogItemAdmin(admin.ModelAdmin):
     ordering      = ("sort_order", "name")
     autocomplete_fields = ("job_rate", "base_setting")
 
-    # ----- permissions -----
     def has_module_permission(self, request):
         if is_hr(request.user) or not request.user.is_staff:
             return False
         return True
-    
-    def has_view_permission(self, request, obj=None):
-        return self.has_module_permission(request)
+    def has_view_permission(self, request, obj=None): return self.has_module_permission(request)
+    def has_add_permission(self, request): return is_owner(request.user) or is_admin(request.user)
+    def has_change_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
+    def has_delete_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
 
-    def has_add_permission(self, request):
-        return is_owner(request.user) or is_admin(request.user)
-    
-    def has_change_permission(self, request, obj=None):
-        if is_owner(request.user) or is_admin(request.user):
-            return True
-        return False
-
-    def has_delete_permission(self, request, obj=None):
-        return is_owner(request.user) or is_admin(request.user)
 
 @admin.register(CostTier)
 class CostTierAdmin(admin.ModelAdmin):
@@ -141,25 +115,14 @@ class CostTierAdmin(admin.ModelAdmin):
     search_fields = ("label", "code", "notes")
     ordering      = ("sort_order", "min_total")
 
-    # ----- permissions -----
     def has_module_permission(self, request):
         if is_hr(request.user) or not request.user.is_staff:
             return False
         return True
-    
-    def has_view_permission(self, request, obj=None):
-        return self.has_module_permission(request)
-
-    def has_add_permission(self, request):
-        return is_owner(request.user) or is_admin(request.user)
-    
-    def has_change_permission(self, request, obj=None):
-        if is_owner(request.user) or is_admin(request.user):
-            return True
-        return False
-
-    def has_delete_permission(self, request, obj=None):
-        return is_owner(request.user) or is_admin(request.user)
+    def has_view_permission(self, request, obj=None): return self.has_module_permission(request)
+    def has_add_permission(self, request): return is_owner(request.user) or is_admin(request.user)
+    def has_change_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
+    def has_delete_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
 
 
 # ---------------------------
@@ -167,37 +130,47 @@ class CostTierAdmin(admin.ModelAdmin):
 # ---------------------------
 
 class DraftItemInline(admin.TabularInline):
-    """
-    Staff picks a CatalogItem; name/desc/job_rate/base snapshot automatically.
-    Only hours/quantity are edited; line_total is computed.
-    """
     model = DraftItem
     extra = 0
     fields = (
         "sort_order",
-        "catalog_item",    # dropdown picker
-        "name", "description", "job_rate", "base_setting",  # readonly snapshots
+        "catalog_item",
+        "name", "description", "job_rate", "base_setting",
         "hours", "quantity",
+        "line_hours_display",
         "line_total",
     )
-    readonly_fields = ("name", "description", "job_rate", "base_setting", "line_total")
+    readonly_fields = ("name", "description", "job_rate", "base_setting", "line_hours_display", "line_total")
     autocomplete_fields = ("catalog_item",)
 
+    def line_hours_display(self, obj):
+        if not obj.pk:
+            return "-"
+        return (obj.hours or 0) * (obj.quantity or 0)
+    line_hours_display.short_description = "Line Hours"
+
+class DraftNoteInline(admin.TabularInline):
+    model = DraftNote
+    extra = 0
+    fields = ("sort_order", "subject", "body_md")
+    ordering = ("sort_order", "id")
 
 @admin.register(ProposalDraft)
 class ProposalDraftAdmin(admin.ModelAdmin):
-    inlines = [DraftItemInline]
+    inlines = [DraftItemInline, DraftNoteInline]
 
     list_display = (
-        "title", "company", "currency",
+        "title", "company", "currency", "total_hours",
         "subtotal", "discount", "discount_amount",
         "total",
         "estimate_tier", "estimate_low", "estimate_high",
-        "estimate_manual",                      # NEW
+        "estimate_manual",
         "deposit_type", "deposit_value", "deposit_amount",
-        "remaining_due", "created_at",
+        "remaining_due",
+        "approval_status", "approved_by", "approved_at",
+        "created_at",
     )
-    list_filter = ("company", "deposit_type", "created_at")
+    list_filter = ("company", "deposit_type", "approval_status", "created_at")
     search_fields = ("title", "company__name", "contact_name", "contact_email")
     ordering = ("-created_at",)
 
@@ -207,6 +180,7 @@ class ProposalDraftAdmin(admin.ModelAdmin):
         ("Discount", {"fields": ("discount", "discount_amount")}),
         ("Totals & Deposit", {
             "fields": (
+                ("total_hours",),
                 ("subtotal", "total"),
                 ("deposit_type", "deposit_value", "deposit_amount"),
                 "remaining_due",
@@ -214,22 +188,37 @@ class ProposalDraftAdmin(admin.ModelAdmin):
         }),
         ("Estimated Tier", {
             "fields": (
-                "estimate_manual",             # NEW toggle
+                "estimate_manual",
                 "estimate_tier",
                 ("estimate_low", "estimate_high"),
+            ),
+        }),
+        ("Approval", {
+            "fields": (
+                "approval_status",
+                ("submitted_at", "approved_at", "approved_by"),
+                "approval_notes",
             ),
         }),
         ("Timestamps", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
     )
 
     readonly_fields = (
+        "total_hours",
         "subtotal", "discount_amount", "total",
         "deposit_amount", "remaining_due",
         "estimate_low", "estimate_high",
         "created_at", "updated_at",
+        "submitted_at", "approved_at", "approved_by",
     )
 
-    actions = ["action_recalc_totals", "action_convert_to_proposal"]
+    actions = [
+        "action_recalc_totals",
+        "action_submit_for_approval",
+        "action_approve_drafts",
+        "action_reject_drafts",
+        "action_convert_to_proposal",
+    ]
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
@@ -245,13 +234,66 @@ class ProposalDraftAdmin(admin.ModelAdmin):
             draft.recalc_totals(save=True)
         self.message_user(request, f"Recalculated totals for {queryset.count()} draft(s).", level=messages.SUCCESS)
 
+    @admin.action(description="Submit for approval")
+    def action_submit_for_approval(self, request, queryset):
+        count = 0
+        for d in queryset:
+            if getattr(d, "approval_status", None) in (getattr(ProposalDraft.ApprovalStatus, "DRAFT", "DRAFT"),
+                                                       getattr(ProposalDraft.ApprovalStatus, "REJECTED", "REJECTED")):
+                d.mark_submitted(actor=request.user, save=True)
+                count += 1
+        self.message_user(request, f"Submitted {count} draft(s) for approval.", level=messages.SUCCESS)
+
+    @admin.action(description="Approve selected (Owner/Admin only)")
+    def action_approve_drafts(self, request, queryset):
+        if not (is_owner(request.user) or is_admin(request.user)):
+            self.message_user(request, "You do not have permission to approve drafts.", level=messages.ERROR)
+            return
+        count = 0
+        for d in queryset:
+            if getattr(d, "approval_status", None) in (getattr(ProposalDraft.ApprovalStatus, "SUBMITTED", "SUBMITTED"),
+                                                       getattr(ProposalDraft.ApprovalStatus, "DRAFT", "DRAFT")):
+                d.mark_approved(actor=request.user, save=True)
+                count += 1
+        self.message_user(request, f"Approved {count} draft(s).", level=messages.SUCCESS)
+
+    @admin.action(description="Reject selected (Owner/Admin only)")
+    def action_reject_drafts(self, request, queryset):
+        if not (is_owner(request.user) or is_admin(request.user)):
+            self.message_user(request, "You do not have permission to reject drafts.", level=messages.ERROR)
+            return
+        count = 0
+        for d in queryset:
+            if getattr(d, "approval_status", None) in (
+                getattr(ProposalDraft.ApprovalStatus, "SUBMITTED", "SUBMITTED"),
+                getattr(ProposalDraft.ApprovalStatus, "DRAFT", "DRAFT"),
+                getattr(ProposalDraft.ApprovalStatus, "APPROVED", "APPROVED"),
+            ):
+                d.mark_rejected(actor=request.user, save=True)
+                count += 1
+        self.message_user(request, f"Rejected {count} draft(s).", level=messages.SUCCESS)
+
     @admin.action(description="Convert to Proposal")
     @transaction.atomic
     def action_convert_to_proposal(self, request, queryset):
+        not_ok = queryset.exclude(approval_status=getattr(ProposalDraft.ApprovalStatus, "APPROVED", "APPROVED")).count()
+        if not_ok:
+            self.message_user(
+                request,
+                "Conversion blocked: All selected drafts must be APPROVED.",
+                level=messages.ERROR,
+            )
+            return
         created = 0
         for draft in queryset:
             draft.recalc_totals(save=True)
-            draft.convert_to_proposal(actor=request.user)
+            proposal = draft.convert_to_proposal(actor=request.user)
+            try:
+                if proposal and getattr(draft, "approved_by_id", None) and not getattr(proposal, "approver_user_id", None):
+                    proposal.approver_user_id = draft.approved_by_id
+                    proposal.save(update_fields=["approver_user"])
+            except Exception:
+                pass
             created += 1
         self.message_user(request, f"Created {created} proposal(s) from selected draft(s).", level=messages.SUCCESS)
 
@@ -265,7 +307,6 @@ class ProposalRecipientInline(admin.TabularInline):
     extra = 0
     fields = ("is_primary", "name", "email", "delivered_at", "last_opened_at")
 
-
 class ProposalEventInline(admin.TabularInline):
     model = ProposalEvent
     extra = 0
@@ -274,21 +315,15 @@ class ProposalEventInline(admin.TabularInline):
     fields = ("kind", "at", "actor", "ip_address", "data")
     show_change_link = False
 
-
 class ProposalLineItemInline(admin.TabularInline):
-    """
-    Read-only snapshot of the items that were materialized from the draft.
-    Includes invoice-compatible fields for your Invoice.from_proposal() flow.
-    """
     model = ProposalLineItem
     extra = 0
-    readonly_fields = ("line_total", "unit_price", "subtotal")
+    readonly_fields = ("line_total", "unit_price", "subtotal", "line_hours")
     fields = (
         "sort_order", "name", "description",
-        "hours", "quantity", "job_rate", "base_setting",
+        "hours", "quantity", "job_rate", "base_setting", "line_hours",
         "line_total", "unit_price", "subtotal",
     )
-
 
 class ProposalAppliedDiscountInline(admin.TabularInline):
     model = ProposalAppliedDiscount
@@ -296,50 +331,121 @@ class ProposalAppliedDiscountInline(admin.TabularInline):
     fields = ("discount_code", "name", "kind", "value", "amount_applied", "sort_order")
     can_delete = False
 
+class ProposalViewerInline(admin.TabularInline):
+    model = ProposalViewer
+    extra = 0
+    autocomplete_fields = ("user",)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        field = super().formfield_for_foreignkey(db_field, request, **kwargs)
+        if db_field.name == "user":
+            prop = getattr(request, "_current_proposal_obj", None)
+            if prop and prop.pk:
+                member_user_ids = CompanyMembership.objects.filter(
+                    company=prop.company, is_active=True
+                ).values_list("user_id", flat=True)
+                field.queryset = field.queryset.filter(pk__in=member_user_ids)
+        return field
+
+class ProposalSectionInline(admin.TabularInline):
+    model = ProposalSection
+    extra = 0
+    fields = ("sort_order", "subject", "body_md", "is_client_visible")
+    ordering = ("sort_order", "id")
+
+@admin.register(ProposalSummary)
+class ProposalSummaryAdmin(admin.ModelAdmin):
+    list_display = ("proposal", "is_visible_to_client", "updated_at")
+    list_filter = ("is_visible_to_client",)
+
+@admin.register(ProposalNote)
+class ProposalNoteAdmin(admin.ModelAdmin):
+    list_display = ("proposal", "subject", "sort_order", "is_visible_to_client")
+    list_filter = ("is_visible_to_client",)
+    search_fields = ("subject", "body_md")
+    ordering = ("proposal", "sort_order", "pk")
 
 @admin.register(Proposal)
 class ProposalAdmin(admin.ModelAdmin):
-    inlines = [ProposalRecipientInline, ProposalEventInline, ProposalLineItemInline, ProposalAppliedDiscountInline]
+    inlines = [
+        ProposalRecipientInline,
+        ProposalEventInline,
+        ProposalLineItemInline,
+        ProposalAppliedDiscountInline,
+        ProposalViewerInline,
+        ProposalSectionInline,
+    ]
 
     list_display = (
-        "title", "company", "currency",
+        "title", "company", "contact_email", "currency", "hours_subtotal", "hours_total",
         "amount_subtotal", "discount_total", "amount_tax", "amount_total",
         "deposit_type", "deposit_value", "deposit_amount",
-        "remaining_due", "sent_at", "signed_at", "sign_link_short", "created_at",
+        "remaining_due", "sent_at", "signed_at",
+        "countersign_flag",
+        "sign_link_short",
+        "pdf_link",
+        "created_at",
     )
-    list_filter = ("company", "deposit_type", "created_at")
+    list_filter = ("company", "deposit_type", "countersign_required", "created_at")
     search_fields = ("title", "company__name")
     ordering = ("-created_at",)
 
     readonly_fields = (
-        "created_at", "updated_at",
+        "hours_subtotal", "hours_total", "created_at", "updated_at",
         "sent_at", "viewed_at", "signed_at",
         "sign_token", "token_expires_at",
         "sign_link_preview",
+        "countersigned_at", "countersigned_by",
     )
 
     fieldsets = (
-        ("Header", {
-            "fields": ("company", "created_by", "title", "currency")
+        ("Header", {"fields": ("company", "created_by", "title", "currency")}),
+        ("Hours",  {"fields": (("hours_subtotal", "hours_total"),)}),
+        ("Totals", {"fields": (("amount_subtotal", "discount_total", "amount_tax", "amount_total"),)}),
+        ("Deposit", {"fields": (("deposit_type", "deposit_value", "deposit_amount"), "remaining_due")}),
+        ("Signing", {"fields": ("sign_token", "token_expires_at", "sign_link_preview", "sent_at", "viewed_at", "signed_at")}),
+
+        ("Validity", {"fields": ("valid_until",)}),
+        ("Narrative (PDF)", {
+            "fields": (
+                "summary_md",
+                "included_md",
+                "overview_md",
+                "addons_md",
+                "maintenance_md",
+                "payment_terms_md",
+                "legal_terms_md",
+            ),
+            "classes": ("collapse",),
         }),
-        ("Totals", {
-            "fields": (("amount_subtotal", "discount_total", "amount_tax", "amount_total"),)
-        }),
-        ("Deposit", {
-            "fields": (("deposit_type", "deposit_value", "deposit_amount"), "remaining_due")
-        }),
-        ("Signing", {
-            "fields": ("sign_token", "token_expires_at", "sign_link_preview", "sent_at", "viewed_at", "signed_at")
-        }),
-        ("Timestamps", {
-            "fields": ("created_at", "updated_at"),
-            "classes": ("collapse",)
-        }),
+        ("Timestamps", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
     )
 
-    actions = ["action_generate_link", "action_mark_sent", "action_mark_signed", "action_make_deposit_invoice"]
+    actions = ["action_generate_link", "action_mark_sent", "action_mark_signed", "action_mark_countersigned", "action_make_deposit_invoice", "action_create_project", "action_recompute_hours",]
 
-    # ---- nice UI bits ----
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        field = super().formfield_for_foreignkey(db_field, request, **kwargs)
+        if db_field.name == "approver_user" and field is not None:
+            try:
+                field.queryset = field.queryset.filter(role__in=[User.Roles.OWNER, User.Roles.ADMIN, User.Roles.EMPLOYEE])
+            except Exception:
+                pass
+        return field
+
+    def get_form(self, request, obj=None, **kwargs):
+        request._current_proposal_obj = obj
+        return super().get_form(request, obj, **kwargs)
+
+    def countersign_flag(self, obj):
+        if not obj.countersign_required:
+            return "—"
+        if obj.countersigned_at:
+            return "✔︎"
+        if obj.signed_at:
+            return "⚠︎ due"
+        return "…"
+    countersign_flag.short_description = "Countersign"
+
     def sign_link_preview(self, obj):
         if not obj.pk:
             return "-"
@@ -355,7 +461,35 @@ class ProposalAdmin(admin.ModelAdmin):
         return f"...{obj.sign_token[-8:]}"
     sign_link_short.short_description = "Sign token"
 
-    # ---- actions ----
+    def pdf_link(self, obj):
+        try:
+            if obj.pdf:
+                return format_html('<a href="{}" target="_blank" rel="noopener">PDF</a>', obj.pdf.url)
+        except Exception:
+            pass
+        return "—"
+    pdf_link.short_description = "PDF"
+
+    @admin.action(description="Recompute Hours (subtotal/total)")
+    def action_recompute_hours(self, request, queryset):
+        updated = 0
+        for p in queryset:
+            # If you created ProposalLineItem.line_hours earlier, this is fast:
+            sub = p.line_items.aggregate(s=Sum("line_hours"))["s"]
+            if sub is None:
+                # fallback if line_hours isn't present:
+                sub = 0
+                for li in p.line_items.all():
+                    sub += (li.hours or 0) * (li.quantity or 0)
+
+            sub = Decimal(sub or 0)
+            tot = sub + Decimal("8.00")
+            p.hours_subtotal = sub
+            p.hours_total = tot
+            p.save(update_fields=["hours_subtotal", "hours_total"])
+            updated += 1
+        self.message_user(request, f"Recomputed hours for {updated} proposal(s).", level=messages.SUCCESS)
+
     @admin.action(description="Generate signing link")
     def action_generate_link(self, request, queryset):
         n = 0
@@ -381,6 +515,14 @@ class ProposalAdmin(admin.ModelAdmin):
             n += 1
         self.message_user(request, f"Marked {n} proposal(s) signed and created deposit invoice(s).", level=messages.SUCCESS)
 
+    @admin.action(description="Mark countersigned")
+    def action_mark_countersigned(self, request, queryset):
+        n = 0
+        for p in queryset:
+            p.mark_countersigned(actor=request.user, save=True)
+            n += 1
+        self.message_user(request, f"Marked {n} proposal(s) as countersigned.", level=messages.SUCCESS)
+
     @admin.action(description="Create deposit invoice now")
     @transaction.atomic
     def action_make_deposit_invoice(self, request, queryset):
@@ -390,3 +532,33 @@ class ProposalAdmin(admin.ModelAdmin):
             if inv is not None:
                 created += 1
         self.message_user(request, f"Created {created} deposit invoice(s).", level=messages.SUCCESS)
+    
+    @admin.action(description="Create Project (from signed)")
+    @transaction.atomic
+    def action_create_project(self, request, queryset):
+        created = 0
+        skipped_unsigned = 0
+        skipped_existing = 0
+
+        for p in queryset:
+            if not getattr(p, "signed_at", None):
+                skipped_unsigned += 1
+                continue
+
+            if getattr(p, "projects", None) and p.projects.exists():
+                skipped_existing += 1
+                continue
+
+            proj = p.create_project(
+                actor=request.user,
+                kickoff_today=True,
+            )
+            if proj:
+                created += 1
+
+        msg = f"Created {created} project(s)."
+        if skipped_unsigned:
+            msg += f" Skipped {skipped_unsigned} (not signed)."
+        if skipped_existing:
+            msg += f" Skipped {skipped_existing} (already had a project)."
+        self.message_user(request, msg, level=messages.SUCCESS if created else messages.INFO)

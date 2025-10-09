@@ -1,0 +1,178 @@
+:root {
+  --yellow: #F2DB1A;
+  --black: #000000;
+  --background: #F7F6F0;
+  --white: #F5F5F5;
+  --green: #426e54;
+  --yb_border: linear-gradient(5deg, #000000 25%, #f2db1a 75%);
+  --muted: #656363;
+  --white-shadow: #FAFAFA;
+  --altmuted: #908d8d;
+  --yellow-shadow: #f2dc1abd;
+  --red: #B91C1C;
+  --alt_green: #9FC6Af;
+  --grey: #aeacac;
+  --alt_grey: #8c8c8c;
+}
+* {
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+  font-family: 'Source Sans Pro', sans-serif;
+  font-display: swap;
+}
+.flexrow {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+.flexcolumn {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.yb-border {
+  border: 4px groove transparent;
+  border-image: var(--yb_border);
+  border-image-slice: 1;
+}
+body main .mini_menu {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  justify-content: space-evenly;
+  width: 100%;
+  margin-bottom: 1em;
+}
+body main .mini_menu a {
+  color: var(--black);
+  text-decoration: none;
+}
+body main .mini_menu a:hover {
+  color: var(--green);
+  text-decoration: underline;
+}
+body main table {
+  width: 50%;
+  margin: 1em;
+}
+body main table tr th {
+  text-align: center;
+  background-color: var(--green);
+  color: var(--white);
+  padding: 1em;
+  font-size: 1.2em;
+}
+body main table tr a {
+  color: var(--black);
+  text-decoration: none;
+}
+body main table tr a:hover {
+  color: var(--green);
+  text-decoration: underline;
+}
+body main .detail {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  align-items: flex-start;
+  margin: 0 0 1em 0;
+  width: 75%;
+}
+body main .detail h3 {
+  text-align: center;
+  background-color: var(--green);
+  color: var(--white);
+  width: 100%;
+  padding: 1em;
+  margin-bottom: 0.5em;
+  border: 4px groove transparent;
+  border-image: var(--yb_border);
+  border-image-slice: 1;
+  font-size: 1.4em;
+}
+body main .detail .entry {
+  width: 100%;
+}
+body main .detail .entry th {
+  background-color: var(--background);
+  color: var(--black);
+  font-size: 1.2em;
+  margin: 1em 0;
+}
+body main .detail .entry td {
+  width: 50%;
+  text-align: left;
+  padding-left: 0.5em;
+}
+body main .detail .alt_entry {
+  margin: 1em 0;
+}
+body main .detail .alt_entry th {
+  font-size: 1.1em;
+  background-color: var(--alt_green);
+  color: var(--black);
+}
+body main .detail tr:nth-child(odd) {
+  background-color: var(--grey);
+}
+body main .detail tr:hover {
+  background-color: var(--alt_grey);
+}
+body main .detail td {
+  padding: 0.5em 0;
+}
+body main .detail .blank {
+  text-align: center;
+}
+body main .detail .notes .note-block {
+  margin: 0 0 0 0.5em;
+}
+body main .detail .notes .note-block .note-body {
+  margin: 0 0 0 2em;
+}
+body main .detail .notes .note-block .note-body li {
+  margin: 0.5em 0;
+}
+body main .detail .note-body {
+  margin: 0 0 0 1.5em;
+}
+body main .detail .note-body li {
+  margin: 0.5em 0;
+}
+body main form .box {
+  margin-top: 1rem;
+}
+body main form .box legend {
+  font-size: 1.1em;
+  padding-inline: 2px;
+}
+body main form .box .grid {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  align-items: flex-start;
+  margin: 0.5em 0 0.5em 1em;
+}
+body main form .box .grid .formHeader {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  justify-content: flex-start;
+}
+body main form .box .grid .formHeader label {
+  width: 200px;
+}
+body main form .box .grid .formHeader label .required {
+  color: var(--red);
+}
+body main form .box .entry {
+  width: 95%;
+}
