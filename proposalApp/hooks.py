@@ -62,12 +62,12 @@ def send_proposal_email(proposal, recipients: Sequence[str], signing_url: str, *
     msg.attach_alternative(body_html, "text/html")
 
     # Optional: attach finalized PDF if present & requested
-    if attach_pdf and proposal.pdf:
-        try:
-            filename = proposal.pdf.name.rsplit("/", 1)[-1]
-            msg.attach(filename, proposal.pdf.read(), "application/pdf")
-        except Exception:
-            pass
+    # if attach_pdf and proposal.pdf:
+    #     try:
+    #         filename = proposal.pdf.name.rsplit("/", 1)[-1]
+    #         msg.attach(filename, proposal.pdf.read(), "application/pdf")
+    #     except Exception:
+    #         pass
 
     msg.send(fail_silently=False)
 

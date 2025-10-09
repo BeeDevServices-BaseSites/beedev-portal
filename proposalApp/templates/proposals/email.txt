@@ -11,5 +11,6 @@ Company: {{ company.name }}
 Total: {{ proposal.amount_total }}
 Open and sign here: {{ signing_url }}
 
+
 Thank you!
 BeeDev Services

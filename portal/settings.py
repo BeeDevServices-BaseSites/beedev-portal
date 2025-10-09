@@ -123,8 +123,8 @@ LOGOUT_REDIRECT_URL = '/'
 PROSPECTS_CLIENT_MODEL = "companyApp.Company"
 
 # Base URL of your future signing page (view will look up Proposal by token)
-# PROPOSAL_SIGNING_URL_BASE = "https://portal.bedev-services.com/proposals/s"
-PROPOSAL_SIGNING_URL_BASE = "http://127.0.0.1:8000/proposals/s"
+# PROPOSAL_SIGNING_URL_BASE = "https://portal.bedev-services.com/p"
+PROPOSAL_SIGNING_URL_BASE = "http://127.0.0.1:8000/p"
 PROPOSAL_MESSENGER = "proposalApp.messenger:send_proposal"
 
 # Dotted-callables (set now or later)

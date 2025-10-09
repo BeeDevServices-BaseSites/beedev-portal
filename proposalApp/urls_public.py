@@ -1,10 +1,11 @@
 # proposalApp/urls_public.py
 from django.urls import path
-from .views import public
+from . import views
+from .views import *
 
 app_name = "proposal_public"
 
 urlpatterns = [
-    path("proposals/s/<str:token>/", public.public_proposal_view, name="view"),
-    path("proposals/s/<str:token>/pdf/", public.public_proposal_pdf, name="pdf"),
+    path("p/<slug:token>/", views.public_proposal_view, name="proposal_public_view"),
+    # (later you can add a signing route: path("p/<slug:token>/sign/", public_views.public_proposal_sign, ...))
 ]
