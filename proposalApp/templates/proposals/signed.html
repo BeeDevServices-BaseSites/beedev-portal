@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% load page_title user_extras %}
+{% block content %}
+<head>
+    <link rel="stylesheet" href="{% static 'css/proposal.css'%}?v={% now 'U' %}">
+    <link rel="stylesheet" href="{% static 'css/proposal-pdf.css' %}?v={% now 'U' %}">
+</head>
+  <h1 class="title">
+    {{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}
+  </h1>
+  <p>Your signature has been recorded for <strong>{{ proposal.title }}</strong>.
+  {% if full_name %} Signed by {{ full_name }}.{% endif %}</p>
+
+  <div class="public-actions">
+    <a class="btn" href="{% url 'proposal_public:proposal_public_view' proposal.sign_token %}">Back to Proposal</a>
+    {% if proposal.pdf %}
+      <a class="btn" href="{{ proposal.pdf.url }}" target="_blank" rel="noopener">Download PDF</a>
+    {% endif %}
+  </div>
+{% endblock %}

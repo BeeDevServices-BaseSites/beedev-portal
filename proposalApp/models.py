@@ -615,6 +615,19 @@ class Proposal(models.Model):
             ip_address=ip, data={"signature": signature_payload}
         )
         return self.signed_at
+    
+    def get_signature_info(self):
+        """
+        Returns {"signed_at": datetime|None, "signer_name": str|None}.
+        Pulls the most recent SIGNED event and reads the payload you already store.
+        """
+        ev = self.events.filter(kind=ProposalEvent.Kind.SIGNED).order_by("-at").first()
+        signer_name = None
+        if ev and ev.data:
+            # mark_signed(...) stored payload under data["signature"]
+            payload = ev.data.get("signature") or ev.data
+            signer_name = (payload.get("full_name") or payload.get("name") or "").strip() or None
+        return {"signed_at": self.signed_at, "signer_name": signer_name}
 
     def create_deposit_invoice(self, *, actor=None, due_date=None, customer_user=None):
         from invoiceApp.models import Invoice

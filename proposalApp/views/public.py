@@ -1,12 +1,14 @@
 # proposalApp/public.py
 from decimal import Decimal
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.utils import timezone
 from django.http import HttpResponseForbidden
 from django.utils.html import linebreaks
 from django.views.decorators.http import require_http_methods
 from ..models import Proposal
 from core.utils.context import base_ctx
+from django import forms
+from django.urls import reverse
 
 def _client_ip(request):
     xff = request.META.get("HTTP_X_FORWARDED_FOR")
@@ -62,6 +64,20 @@ def _build_staff_pdf_context_from_proposal(p: Proposal):
         "valid_until": valid_until,
     }
 
+def _common_page_ctx(p: Proposal, title_text: str):
+    """Shared page heading + back link."""
+    return {
+        "title": title_text,
+        "heading": title_text,
+        "page_heading": title_text,
+        "title_short": p.title,
+        "back_url": reverse("proposal_public:proposal_public_view", args=[p.sign_token]),
+    }
+
+class SignProposalForm(forms.Form):
+    full_name = forms.CharField(max_length=160, label="Your full name")
+    accept    = forms.BooleanField(label="I agree to the proposal and terms")
+
 @require_http_methods(["GET"])
 def public_proposal_view(request, token: str):
     p = get_object_or_404(Proposal, sign_token=token)
@@ -80,3 +96,39 @@ def public_proposal_view(request, token: str):
         "company": p.company,
     })
     return render(request, "proposals/public_view.html", ctx)
+
+@require_http_methods(["GET", "POST"])
+def public_proposal_sign(request, token: str):
+    p = get_object_or_404(Proposal, sign_token=token)
+    if not _token_valid(p):
+        return render(request, "proposals/token_expired.html", {"proposal": p}, status=403)
+
+    # If already signed, just show the confirmation page
+    if p.signed_at:
+        return render(request, "proposals/signed.html", {"proposal": p, **_common_page_ctx(p, f"Thank you!")})
+
+    if request.method == "POST":
+        form = SignProposalForm(request.POST)
+        if form.is_valid():
+            payload = {
+                "full_name": form.cleaned_data["full_name"],
+                "accepted_terms": True,
+                "signed_via": "public",
+                "user_agent": request.META.get("HTTP_USER_AGENT", ""),
+                "signed_at_iso": timezone.now().isoformat(),
+            }
+            # This will also create a deposit invoice via your existing mark_signed()
+            p.mark_signed(
+                actor=None,
+                ip=_client_ip(request),
+                signature_payload=payload,
+                due_date=None,
+                customer_user=None,
+            )
+            ctx = {"proposal": p, "full_name": payload["full_name"], **_common_page_ctx(p, f"Thank you!") }
+            return render(request, "proposals/signed.html", ctx)
+    else:
+        form = SignProposalForm()
+
+    ctx = {"proposal": p, "form": form, **_common_page_ctx(p, f"{p.title} Proposal") }
+    return render(request, "proposals/sign.html", ctx)

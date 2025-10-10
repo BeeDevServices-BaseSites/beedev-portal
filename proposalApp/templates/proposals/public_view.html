@@ -14,7 +14,11 @@
     {% if proposal.pdf %}
       <a class="btn" href="{{ proposal.pdf.url }}" target="_blank" rel="noopener">Download PDF</a>
     {% endif %}
-      <a class="btn primary" href="">Sign this Proposal</a>
+    {% if not proposal.signed_at %}
+      <a class="btn primary" href="{% url 'proposal_public:proposal_public_sign' proposal.sign_token %}">Sign this Proposal</a>
+    {% else %}
+      <span class="badge">Signed on {{ proposal.signed_at|date:"F j, Y, g:i a T" }}</span>
+    {% endif %}
   </div>
 
   <!DOCTYPE html>
