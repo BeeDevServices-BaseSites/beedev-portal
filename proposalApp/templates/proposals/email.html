@@ -19,39 +19,52 @@
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #FDF8DA;">
                         <tr>
                             <td style="padding: 16px;">
-                                <div style="text-align: center;">
-                                    <hr style="width: 95%; margin: 24px auto; border: 2px solid #F3DB18;">
+                                <div>
                                     <p style="font-size: 1.1rem; margin: 0 0 8px 0;">Proposal for {{ company.name }}</p>
                                 </div>
                             </td>
                         </tr>
                         <tr>
                             <td style="padding: 16px;">
-                                <div style="text-align: center;">
-                                    <hr style="width: 95%; margin: 24px auto; border: 2px solid #F3DB18;">
+                                <div>
                                     <p style="font-size: 1.1rem; margin: 0 0 8px 0;">It was a pleasure meeting with you.  As promised please find below a link to your custom proposal for review and signature.</p>
                                 </div>
                             </td>
                         </tr>
                         <tr>
                             <td style="padding: 16px;">
-                                <div style="text-align: center;">
-                                    <hr style="width: 95%; margin: 24px auto; border: 2px solid #F3DB18;">
+                                <div>
                                     <p style="font-size: 1.1rem; margin: 0 0 8px 0;">Once signed you will be prompted to create an account in our system which will then allow you to see the invoice associated to this proposal and allow you to make the deposit if one is required.</p>
+                                    <hr style="width: 95%; margin: 24px auto; border: 2px solid #F3DB18;">
                                 </div>
                             </td>
                         </tr>
                         <tr>
-                            <td>
-                                Please review your proposal:
+                            <td style="padding: 16px;">
+                                <p style="font-size: 1.1rem; margin: 0 0 8px 0;">Please review your proposal:</p>
                             </td>
                         </tr>
                         <tr>
-                            <td>
-                                Project name: {{ proposal.title }} <br>
+                            <td style="padding: 16px;">
+                                <p style="font-size: 1.1rem; margin: 0 0 8px 0;">Project name: {{ proposal.title }} <br>
                                 Company: {{ company.name }} <br>
                                 Total: {{ proposal.amount_total }} <br>
-                                <a href="{{ signing_url }}">Open and sign</a>
+                                <a href="{{ signing_url }}">Open and sign</a></p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 16px;">
+                                <p style="font-size: 1.1rem; margin: 0 0 8px 0;">
+                                    We look forward to hearing from you <br>
+                                    Please feel free to email with any questions <br>
+                                    {% if sender_name %}
+                                        {{sender_name}} <br>
+                                    {% endif %}
+                                    {{sender_title}} <br>
+                                    <img src="https://images.thehive-services.com/beeDevServices/logo.png" alt="beedev logo" style="height: 40px;"><br>
+                                    <a href="https://beedev-services.com/">BeeDev Services</a><br>
+                                    "Your Vision, Hive Crafted"
+                                </p>
                             </td>
                         </tr>
                         <tr>

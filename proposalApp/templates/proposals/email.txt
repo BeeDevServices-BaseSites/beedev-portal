@@ -1,4 +1,4 @@
-Hello,
+Proposal for {{company.name}}
 
 It was a pleasure meeting with you.  As promised please find below a link to your custom proposal for review and signature.
 
@@ -12,5 +12,9 @@ Total: {{ proposal.amount_total }}
 Open and sign here: {{ signing_url }}
 
 
-Thank you!
-BeeDev Services
+We look forward to hearing from you
+Please feel free to email with any questions
+{% if sender_name %}{{ sender_name }} {% endif %}
+{{ sender_title }}
+https://beedev-services.com
+"Your Vision, Hive Crafted"

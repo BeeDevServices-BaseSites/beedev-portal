@@ -572,7 +572,7 @@ def send_proposal(request, pk: int):
                 mod_path, fn_name = hook_path.split(":") if ":" in hook_path else hook_path.rsplit(".", 1)
                 mod = __import__(mod_path, fromlist=[fn_name])
                 hook = getattr(mod, fn_name)
-                hook(proposal, emails, proposal.get_signing_url(), attach_pdf=bool(proposal.pdf))
+                hook(proposal, emails, proposal.get_signing_url(), attach_pdf=bool(proposal.pdf), sender_user=request.user,)
             else:
                 raise RuntimeError("PROPOSAL_MESSENGER not configured")
         

@@ -502,7 +502,7 @@ class ProposalAdmin(admin.ModelAdmin):
     def action_mark_sent(self, request, queryset):
         n = 0
         for p in queryset:
-            p.mark_sent(actor=request.user)
+            p.mark_sent(actor=request.user, messenger_kwargs={"sender_user": request.user})
             n += 1
         self.message_user(request, f"Marked {n} proposal(s) as sent.", level=messages.SUCCESS)
 
