@@ -12,6 +12,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Sum, F, ExpressionWrapper, DecimalField
 from invoiceApp.models import Invoice
+from hashlib import sha256
 
 
 # ---------- Helpers ----------
@@ -161,6 +162,14 @@ class ProposalDraft(models.Model):
     contact_name = models.CharField(max_length=160, blank=True)
     contact_email = models.EmailField(blank=True)
 
+    pre_signed_at = models.DateTimeField(null=True, blank=True)
+    pre_signed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="drafts_pre_signed"
+    )
+    pre_signature_payload = models.JSONField(null=True, blank=True)
+    pre_signature_hash = models.CharField(max_length=64, blank=True)
+
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     discount = models.ForeignKey(Discount, null=True, blank=True, on_delete=models.SET_NULL)
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
@@ -220,11 +229,27 @@ class ProposalDraft(models.Model):
             self.contact_email = (c.primary_email or "").strip()
 
     def save(self, *args, **kwargs):
-        if not self.pk:
+        creating = self._state.adding
+        if creating:
             self.autofill_contact_from_company(force=False)
-        super().save(*args, **kwargs)
+
+        # Set the flag BEFORE saving so we only save once
         if self.discount_id:
-            self.discount_requires_verification = bool(getattr(self.discount, "requires_verification", False))  # NEW
+            self.discount_requires_verification = bool(
+                getattr(self.discount, "requires_verification", False)
+            )
+        else:
+            self.discount_requires_verification = False
+        
+        if self.pk and self.pre_signed_at:
+            new_hash = self._contract_hash_for_presign()
+            if self.pre_signature_hash and self.pre_signature_hash != new_hash:
+                # Clear pre-sign because the content changed
+                self.pre_signed_at = None
+                self.pre_signed_by = None
+                self.pre_signature_payload = None
+                self.pre_signature_hash = ""
+
         super().save(*args, **kwargs)
 
     def mark_submitted(self, actor=None, save=True):
@@ -458,6 +483,20 @@ class ProposalDraft(models.Model):
                 proposal=prop,
                 defaults={"body_md": summary_text, "is_visible_to_client": True},
             )
+        
+        if self.is_pre_signed:
+            prop.countersigned_at = self.pre_signed_at
+            prop.countersigned_by = self.pre_signed_by
+            prop.countersign_required = False
+            prop.save(update_fields=["countersigned_at","countersigned_by","countersign_required"])
+
+            # If there is already a stored PDF, stamp it with the company signature
+            if getattr(prop, "pdf", None) and prop.pdf:
+                from django.core.files.base import ContentFile
+                from proposalApp.services import pdf_stamp
+
+                fname, data = pdf_stamp.overlay_signature_on_last_page(prop, self.pre_signed_by)  # or append_certificate
+                prop.pdf.save(fname, ContentFile(data))
 
         self.approval_status = self.ApprovalStatus.CONVERTED
         self.save(update_fields=["approval_status", "updated_at"])
@@ -468,6 +507,47 @@ class ProposalDraft(models.Model):
     def valid_until_effective(self):
         base = self.created_at or timezone.now()
         return (self.valid_until or (base + timedelta(days=30))).date()
+    
+    def _contract_hash_for_presign(self) -> str:
+        """
+        Hash the stuff you consider 'material'. Keep it simple to start.
+        If you later want line-by-line certainty, include items data.
+        """
+        parts = [
+            str(self.company_id or ""),
+            (self.title or ""),
+            (self.currency or ""),
+            str(self.subtotal or "0"),
+            str(self.discount_id or ""),
+            str(self.discount_amount or "0"),
+            str(self.total or "0"),
+            (self.summary_md or ""),
+            (self.payment_terms_md or ""),
+            (self.legal_terms_md or ""),
+        ]
+        return sha256("||".join(parts).encode("utf-8")).hexdigest()
+
+    def mark_pre_signed(self, *, actor, payload: dict | None = None, save=True):
+        self.pre_signed_at = timezone.now()
+        self.pre_signed_by = actor
+        self.pre_signature_payload = payload or {"name": getattr(actor, "get_full_name", lambda: "")() or str(actor)}
+        self.pre_signature_hash = self._contract_hash_for_presign()
+        if save:
+            self.save(update_fields=[
+                "pre_signed_at","pre_signed_by","pre_signature_payload","pre_signature_hash","updated_at"
+            ])
+
+    def revoke_pre_sign(self, *, actor=None, reason=None, save=True):
+        self.pre_signed_at = None
+        self.pre_signed_by = None
+        self.pre_signature_payload = None
+        self.pre_signature_hash = ""
+        if save:
+            self.save(update_fields=["pre_signed_at","pre_signed_by","pre_signature_payload","pre_signature_hash","updated_at"])
+
+    @property
+    def is_pre_signed(self) -> bool:
+        return bool(self.pre_signed_at and self.pre_signed_by_id)
 
 class DraftNote(models.Model):
     draft = models.ForeignKey("ProposalDraft", on_delete=models.CASCADE, related_name="notes")

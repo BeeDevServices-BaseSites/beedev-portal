@@ -1,14 +1,15 @@
 # proposalApp/admin.py
-
 from decimal import Decimal, ROUND_HALF_UP
-
 from django.contrib import admin, messages
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
-
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from .models import proposal_pdf_upload_to
+from proposalApp.services import pdf_stamp
 from companyApp.models import CompanyMembership
 from userApp.models import User
 from .models import (
@@ -217,6 +218,30 @@ class DraftNoteInline(admin.TabularInline):
     fields = ("sort_order", "subject", "body_md")
     ordering = ("sort_order", "id")
 
+@admin.action(description="Pre-sign (Owner/Admin only)")
+def action_pre_sign(self, request, queryset):
+    if not (is_owner(request.user) or is_admin(request.user)):
+        self.message_user(request, "You do not have permission to pre-sign.", level=messages.ERROR)
+        return
+    n = 0
+    for d in queryset:
+        # optional: require APPROVED status first
+        if d.approval_status not in (ProposalDraft.ApprovalStatus.APPROVED,):
+            continue
+        d.mark_pre_signed(actor=request.user, payload={"name": request.user.get_full_name() or str(request.user)})
+        n += 1
+    self.message_user(request, f"Pre-signed {n} draft(s).", level=messages.SUCCESS)
+
+@admin.action(description="Revoke pre-sign")
+def action_revoke_pre_sign(self, request, queryset):
+    n = 0
+    for d in queryset:
+        if d.is_pre_signed:
+            d.revoke_pre_sign(actor=request.user, reason="Admin revoke")
+            n += 1
+    self.message_user(request, f"Revoked pre-sign on {n} draft(s).", level=messages.SUCCESS)
+
+
 @admin.register(ProposalDraft)
 class ProposalDraftAdmin(admin.ModelAdmin):
     inlines = [DraftItemInline, DraftNoteInline]
@@ -231,7 +256,7 @@ class ProposalDraftAdmin(admin.ModelAdmin):
         "is_discount_verified", "discount_requires_verification",
         "remaining_due",
         "approval_status", "approved_by", "approved_at",
-        "created_at",
+        "created_at", "is_pre_signed"
     )
     list_filter = ("discount_requires_verification", "is_discount_verified", "company", "deposit_type", "approval_status", "created_at")
     search_fields = ("title", "company__name", "contact_name", "contact_email")
@@ -273,6 +298,7 @@ class ProposalDraftAdmin(admin.ModelAdmin):
         "estimate_low", "estimate_high",
         "created_at", "updated_at",
         "submitted_at", "approved_at", "approved_by",
+        "pre_signed_at","pre_signed_by","pre_signature_hash"
     )
 
     actions = [
@@ -438,6 +464,30 @@ class ProposalNoteAdmin(admin.ModelAdmin):
 
 # ----- Proposal actions (module scope) -----
 
+@admin.action(description="Backfill company countersign (append certificate)")
+def action_backfill_countersign(self, request, queryset):
+    user = request.user
+    n_ok, n_err = 0, 0
+    for p in queryset:
+        try:
+            # Set countersign metadata if missing
+            if not p.countersigned_at:
+                p.countersigned_at = timezone.now()
+                p.countersigned_by = user
+                p.countersign_required = False
+                p.save(update_fields=["countersigned_at","countersigned_by","countersign_required","updated_at"])
+
+            fname, data = pdf_stamp.append_certificate(p, user)  # or overlay_signature_on_last_page(p, user)
+            # Save as new file (don’t overwrite original path)
+            storage_name = proposal_pdf_upload_to(p, fname)
+            default_storage.save(storage_name, ContentFile(data))
+            p.pdf.name = storage_name
+            p.save(update_fields=["pdf", "updated_at"])
+            n_ok += 1
+        except Exception as e:
+            n_err += 1
+    self.message_user(request, f"Countersigned {n_ok} PDF(s). Errors: {n_err}.")
+
 @admin.action(description="Mark discount verified (Proposal)")
 def mark_proposal_discount_verified(modeladmin, request, queryset):
     now = timezone.now()
@@ -567,6 +617,7 @@ class ProposalAdmin(admin.ModelAdmin):
         "action_make_deposit_invoice",
         "action_create_project",
         "action_recompute_hours",
+        "action_backfill_countersign",
     ]
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):

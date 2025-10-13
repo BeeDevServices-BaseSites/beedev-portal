@@ -9,6 +9,7 @@ from ..models import Proposal
 from core.utils.context import base_ctx
 from django import forms
 from django.urls import reverse
+from proposalApp.services.signature import save_user_signature, compute_proposal_hash
 
 def _client_ip(request):
     xff = request.META.get("HTTP_X_FORWARDED_FOR")
