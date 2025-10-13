@@ -13,7 +13,7 @@ from companyApp.models import Company
 from core.utils.context import base_ctx
 from django.contrib import messages
 from django.urls import reverse
-from proposalApp.pdf import generate_proposal_pdf
+from proposalApp.services.pdf_service import generate_proposal_pdf
 from django.http import FileResponse, HttpResponseNotAllowed
 from decimal import Decimal, InvalidOperation
 from django.forms import formset_factory

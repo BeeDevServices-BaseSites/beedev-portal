@@ -11,6 +11,7 @@ from django.core.validators import FileExtensionValidator
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Sum, F, ExpressionWrapper, DecimalField
+from invoiceApp.models import Invoice
 
 
 # ---------- Helpers ----------
@@ -34,6 +35,10 @@ def proposal_pdf_upload_to(instance, filename):
     company_slug = getattr(getattr(instance, "company", None), "slug", None) or "proposal"
     return f"proposals/{today.year}/{today.month:02d}/{company_slug}-{uuid.uuid4().hex}{ext}"
 
+def proof_upload_to(instance, filename):
+    # Store in media/discount_proofs/YYYY/MM/<proposalId>/<filename>
+    dt = timezone.now()
+    return f"discount_proofs/{dt.year}/{dt.month:02}/{instance.id}/{filename}"
 
 # ======================================================================
 #                        REFERENCE TABLES
@@ -76,6 +81,8 @@ class Discount(models.Model):
     kind  = models.CharField(max_length=10, choices=Kind.choices, default=Kind.PERCENT)
     value = models.DecimalField(max_digits=10, decimal_places=2)
     is_active = models.BooleanField(default=True)
+    requires_verification = models.BooleanField(default=False)
+    stackable = models.BooleanField(default=False)
 
     class Meta:
         ordering = ("code",)
@@ -159,6 +166,16 @@ class ProposalDraft(models.Model):
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
 
+    discount_requires_verification = models.BooleanField(default=False)
+    is_discount_verified = models.BooleanField(default=False)
+    verification_file = models.FileField(upload_to=proof_upload_to, null=True, blank=True)
+    verification_note = models.CharField(max_length=240, blank=True)
+    verification_checked_at = models.DateTimeField(null=True, blank=True)
+    verification_checked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="proposal_drafts_verified"
+    )
+
     total_hours = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
 
     deposit_type  = models.CharField(max_length=10, choices=DepositType.choices, default=DepositType.NONE)
@@ -206,6 +223,9 @@ class ProposalDraft(models.Model):
         if not self.pk:
             self.autofill_contact_from_company(force=False)
         super().save(*args, **kwargs)
+        if self.discount_id:
+            self.discount_requires_verification = bool(getattr(self.discount, "requires_verification", False))  # NEW
+        super().save(*args, **kwargs)
 
     def mark_submitted(self, actor=None, save=True):
         name  = (self.company.primary_contact_name or "").strip() if self.company else ""
@@ -247,11 +267,14 @@ class ProposalDraft(models.Model):
         return q2((hours * qty * hr) + base)
 
     def compute_discount_amount(self, base: Decimal) -> Decimal:
+        base = q2(base or 0)
         if not self.discount or not self.discount.is_active:
             return Decimal("0.00")
         if self.discount.kind == Discount.Kind.PERCENT:
-            return q2((base or 0) * (self.discount.value or 0) / Decimal("100"))
-        return q2(self.discount.value or 0)
+            amt = q2(base * (self.discount.value or 0) / Decimal("100"))
+        amt = q2(self.discount.value or 0)
+        # Cap at base
+        return amt if amt <= base else base
 
     def compute_deposit_amount(self, grand_total: Decimal) -> Decimal:
         if self.deposit_type == self.DepositType.PERCENT:
@@ -294,16 +317,43 @@ class ProposalDraft(models.Model):
 
         line_sum = q2(agg["money_sum"] or Decimal("0.00"))
         self.subtotal = line_sum
-        self.discount_amount = q2(self.compute_discount_amount(self.subtotal))
+
+        discount_allowed = False
+        if self.discount and self.discount.is_active:
+            if getattr(self.discount, "requires_verification", False):
+                discount_allowed = bool(self.is_discount_verified)
+            else:
+                discount_allowed = True
+        
+        disc_amt = self.compute_discount_amount(self.subtotal) if discount_allowed else Decimal("0.00")
+        if disc_amt > self.subtotal:
+            disc_amt = self.subtotal
+        self.discount_amount = q2(disc_amt)
+
+        # self.discount_amount = q2(self.compute_discount_amount(self.subtotal)) if discount_allowed else Decimal("0.00")
+
         base_total = q2(self.subtotal - self.discount_amount)
+        if base_total < Decimal("0.00"):
+            base_total = Decimal("0.00")
+
         self.total = base_total
-        self.deposit_amount = q2(self.compute_deposit_amount(self.total))
-        self.remaining_due  = q2(self.total - self.deposit_amount)
+
+        pre_discount_for_deposit = self.subtotal
+        deposit_calc = q2(self.compute_deposit_amount(pre_discount_for_deposit))
+
+        if base_total <= Decimal("0.00"):
+            deposit_calc = Decimal("0.00")
+
+        if deposit_calc > self.total:
+            deposit_calc = self.total
+
+        self.deposit_amount = deposit_calc
+        self.remaining_due  = q2(base_total - deposit_calc)
 
         if save:
             self.save(update_fields=[
                 "total_hours", "subtotal", "discount_amount", "total",
-                "deposit_amount", "remaining_due", "updated_at"
+                "deposit_amount", "remaining_due", "discount_requires_verification", "updated_at"
             ])
 
         self.update_estimate_from_tiers(save=True)
@@ -357,7 +407,8 @@ class ProposalDraft(models.Model):
                 line_hours=(li.hours or Decimal("0.00")) * (li.quantity or Decimal("0.00")),
             )
 
-        if self.discount and self.discount_amount:
+        if self.discount:
+            pending = getattr(self.discount, "requires_verification", False) and not self.is_discount_verified
             ProposalAppliedDiscount.objects.create(
                 proposal=prop,
                 discount_code=self.discount.code,
@@ -366,7 +417,23 @@ class ProposalDraft(models.Model):
                 value=self.discount.value,
                 amount_applied=self.discount_amount,
                 sort_order=0,
+                requires_verification=getattr(self.discount, "requires_verification", False),
+                pending_verification=pending,
             )
+        
+        if self.discount:
+            prop.discount_requires_verification = bool(getattr(self.discount, "requires_verification", False))
+            prop.is_discount_verified = bool(self.is_discount_verified)
+            if self.verification_file:
+                prop.verification_file = self.verification_file
+            prop.verification_note = self.verification_note or ""
+            prop.verification_checked_at = self.verification_checked_at
+            prop.verification_checked_by = self.verification_checked_by
+            prop.save(update_fields=[
+                "discount_requires_verification", "is_discount_verified",
+                "verification_file", "verification_note",
+                "verification_checked_at", "verification_checked_by",
+            ])
 
         for n in self.notes.all().order_by("sort_order", "pk"):
             ProposalSection.objects.create(
@@ -508,6 +575,16 @@ class Proposal(models.Model):
     discount_total  = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     amount_total    = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
 
+    discount_requires_verification = models.BooleanField(default=False)
+    is_discount_verified = models.BooleanField(default=False)
+    verification_file = models.FileField(upload_to=proof_upload_to, null=True, blank=True)
+    verification_note = models.CharField(max_length=240, blank=True)
+    verification_checked_at = models.DateTimeField(null=True, blank=True)
+    verification_checked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="proposals_verified"
+    )
+
     deposit_type   = models.CharField(max_length=10, default=ProposalDraft.DepositType.NONE, choices=ProposalDraft.DepositType.choices)
     deposit_value  = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     deposit_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
@@ -603,6 +680,17 @@ class Proposal(models.Model):
         )
         return first
 
+    def create_deposit_invoice(self, *, actor=None, due_date=None, customer_user=None):
+        if q2(self.amount_total) <= Decimal("0.00") or q2(self.deposit_amount) <= Decimal("0.00"):
+            return None
+
+        return Invoice.from_proposal(
+            self,
+            created_by=actor,
+            due_date=due_date,
+            customer_user=customer_user,
+        )
+    
     def mark_signed(self, *, actor=None, ip=None, signature_payload=None, due_date=None, customer_user=None):
         if not self.signed_at:
             self.signed_at = timezone.now()
@@ -753,6 +841,9 @@ class ProposalAppliedDiscount(models.Model):
     value          = models.DecimalField(max_digits=10, decimal_places=2)
     amount_applied = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     sort_order     = models.PositiveIntegerField(default=0)
+
+    requires_verification = models.BooleanField(default=False)
+    pending_verification  = models.BooleanField(default=False)
 
     class Meta:
         ordering = ("sort_order", "id")

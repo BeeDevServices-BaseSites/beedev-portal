@@ -6,10 +6,6 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 def send_proposal_email(proposal, emails: Sequence[str], signing_url: str, *, cc: Iterable[str] = (), attach_pdf: bool = False):
-    """
-    Called by Proposal.mark_sent(). Sends one email to all to/cc recipients.
-    Updates ProposalRecipient.delivered_at when possible.
-    """
     if not emails:
         return
 

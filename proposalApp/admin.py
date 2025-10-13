@@ -1,10 +1,13 @@
 # proposalApp/admin.py
+
+from decimal import Decimal, ROUND_HALF_UP
+
 from django.contrib import admin, messages
 from django.db import transaction
+from django.db.models import Sum
+from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
-from django.db.models import Sum
-from decimal import Decimal
 
 from companyApp.models import CompanyMembership
 from userApp.models import User
@@ -28,7 +31,10 @@ from .models import (
     ProposalSummary,
 )
 
-# -------- permission helpers --------
+# =========================
+# Permission helpers
+# =========================
+
 def is_owner(u):
     return u.is_active and (u.is_superuser or u.groups.filter(name="Owner").exists())
 
@@ -41,9 +47,47 @@ def is_hr(u):
 def is_plain_staff(u):
     return u.is_active and u.is_staff and not is_owner(u) and not is_admin(u) and not is_hr(u)
 
-# ---------------------------
+
+# =========================
+# Money & totals helpers
+# =========================
+
+def q2(val):
+    """Quantize to cents with HALF_UP rounding."""
+    if val is None:
+        val = Decimal("0")
+    return Decimal(val).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+def _recompute_proposal_totals(p: Proposal):
+    discounts_sum = p.applied_discounts.aggregate(s=Sum("amount_applied"))["s"] or Decimal("0.00")
+    p.discount_total = q2(discounts_sum)
+    p.amount_total = q2((p.amount_subtotal or 0) - p.discount_total)
+
+    p.amount_total = q2((p.amount_subtotal or 0) - p.discount_total)
+    if p.amount_total < Decimal("0.00"):
+        p.amount_total = Decimal("0.00")
+
+    if p.deposit_type == ProposalDraft.DepositType.PERCENT:
+        dep = q2((p.amount_subtotal or 0) * (p.deposit_value or 0) / Decimal("100"))
+    elif p.deposit_type == ProposalDraft.DepositType.FIXED:
+        dep = q2(p.deposit_value or 0)
+    else:
+        dep = Decimal("0.00")
+
+    # Cap deposit to post-discount total
+    if p.amount_total <= Decimal("0.00"):
+        dep = Decimal("0.00")
+    elif dep > p.amount_total:
+        dep = p.amount_total
+
+    p.deposit_amount = dep
+    p.remaining_due = q2(p.amount_total - dep)
+    p.save(update_fields=["discount_total", "amount_total", "deposit_amount", "remaining_due", "updated_at"])
+
+
+# =========================
 # Reference/Admin catalogs
-# ---------------------------
+# =========================
 
 @admin.register(JobRate)
 class JobRateAdmin(admin.ModelAdmin):
@@ -125,9 +169,27 @@ class CostTierAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
 
 
-# ---------------------------
-# Drafts
-# ---------------------------
+# =========================
+# DRAFTS
+# =========================
+
+@admin.action(description="Mark discount verified (Draft)")
+def mark_draft_discount_verified(modeladmin, request, queryset):
+    now = timezone.now()
+    for d in queryset:
+        d.is_discount_verified = True
+        d.verification_checked_at = now
+        d.verification_checked_by = request.user
+        d.recalc_totals(save=True)
+
+@admin.action(description="Revoke discount verification (Draft)")
+def revoke_draft_discount_verified(modeladmin, request, queryset):
+    now = timezone.now()
+    for d in queryset:
+        d.is_discount_verified = False
+        d.verification_checked_at = now
+        d.verification_checked_by = request.user
+        d.recalc_totals(save=True)
 
 class DraftItemInline(admin.TabularInline):
     model = DraftItem
@@ -166,11 +228,12 @@ class ProposalDraftAdmin(admin.ModelAdmin):
         "estimate_tier", "estimate_low", "estimate_high",
         "estimate_manual",
         "deposit_type", "deposit_value", "deposit_amount",
+        "is_discount_verified", "discount_requires_verification",
         "remaining_due",
         "approval_status", "approved_by", "approved_at",
         "created_at",
     )
-    list_filter = ("company", "deposit_type", "approval_status", "created_at")
+    list_filter = ("discount_requires_verification", "is_discount_verified", "company", "deposit_type", "approval_status", "created_at")
     search_fields = ("title", "company__name", "contact_name", "contact_email")
     ordering = ("-created_at",)
 
@@ -213,6 +276,10 @@ class ProposalDraftAdmin(admin.ModelAdmin):
     )
 
     actions = [
+        # draft-specific actions
+        mark_draft_discount_verified,
+        revoke_draft_discount_verified,
+        # utility actions
         "action_recalc_totals",
         "action_submit_for_approval",
         "action_approve_drafts",
@@ -298,9 +365,9 @@ class ProposalDraftAdmin(admin.ModelAdmin):
         self.message_user(request, f"Created {created} proposal(s) from selected draft(s).", level=messages.SUCCESS)
 
 
-# ---------------------------
-# Proposals
-# ---------------------------
+# =========================
+# PROPOSALS
+# =========================
 
 class ProposalRecipientInline(admin.TabularInline):
     model = ProposalRecipient
@@ -350,13 +417,16 @@ class ProposalViewerInline(admin.TabularInline):
 class ProposalSectionInline(admin.TabularInline):
     model = ProposalSection
     extra = 0
+    # If your model doesn't have `is_client_visible`, remove it from fields:
     fields = ("sort_order", "subject", "body_md", "is_client_visible")
     ordering = ("sort_order", "id")
+
 
 @admin.register(ProposalSummary)
 class ProposalSummaryAdmin(admin.ModelAdmin):
     list_display = ("proposal", "is_visible_to_client", "updated_at")
     list_filter = ("is_visible_to_client",)
+
 
 @admin.register(ProposalNote)
 class ProposalNoteAdmin(admin.ModelAdmin):
@@ -364,6 +434,70 @@ class ProposalNoteAdmin(admin.ModelAdmin):
     list_filter = ("is_visible_to_client",)
     search_fields = ("subject", "body_md")
     ordering = ("proposal", "sort_order", "pk")
+
+
+# ----- Proposal actions (module scope) -----
+
+@admin.action(description="Mark discount verified (Proposal)")
+def mark_proposal_discount_verified(modeladmin, request, queryset):
+    now = timezone.now()
+    for p in queryset:
+        # If verification fields exist on Proposal, update them:
+        if hasattr(p, "is_discount_verified"):
+            p.is_discount_verified = True
+            if hasattr(p, "verification_checked_at"):
+                p.verification_checked_at = now
+            if hasattr(p, "verification_checked_by"):
+                p.verification_checked_by = request.user
+            p.save(update_fields=[
+                *(["is_discount_verified"] if hasattr(p, "is_discount_verified") else []),
+                *(["verification_checked_at"] if hasattr(p, "verification_checked_at") else []),
+                *(["verification_checked_by"] if hasattr(p, "verification_checked_by") else []),
+            ])
+
+        # Flip pending verification-required discounts to active
+        for ad in p.applied_discounts.all():
+            requires_ver = getattr(ad, "requires_verification", False)
+            pending = getattr(ad, "pending_verification", False)
+            if requires_ver and pending:
+                if ad.kind == "PERCENT":
+                    ad.amount_applied = q2((p.amount_subtotal or 0) * (ad.value or 0) / Decimal("100"))
+                else:
+                    ad.amount_applied = q2(ad.value or 0)
+                if hasattr(ad, "pending_verification"):
+                    ad.pending_verification = False
+                ad.save(update_fields=["amount_applied", *(["pending_verification"] if hasattr(ad, "pending_verification") else [])])
+
+        _recompute_proposal_totals(p)
+
+@admin.action(description="Revoke discount verification (Proposal)")
+def revoke_proposal_discount_verified(modeladmin, request, queryset):
+    now = timezone.now()
+    for p in queryset:
+        if hasattr(p, "is_discount_verified"):
+            p.is_discount_verified = False
+            if hasattr(p, "verification_checked_at"):
+                p.verification_checked_at = now
+            if hasattr(p, "verification_checked_by"):
+                p.verification_checked_by = request.user
+            p.save(update_fields=[
+                *(["is_discount_verified"] if hasattr(p, "is_discount_verified") else []),
+                *(["verification_checked_at"] if hasattr(p, "verification_checked_at") else []),
+                *(["verification_checked_by"] if hasattr(p, "verification_checked_by") else []),
+            ])
+
+        for ad in p.applied_discounts.all():
+            requires_ver = getattr(ad, "requires_verification", False)
+            if requires_ver:
+                ad.amount_applied = Decimal("0.00")
+                if hasattr(ad, "pending_verification"):
+                    ad.pending_verification = True
+                    ad.save(update_fields=["amount_applied", "pending_verification"])
+                else:
+                    ad.save(update_fields=["amount_applied"])
+
+        _recompute_proposal_totals(p)
+
 
 @admin.register(Proposal)
 class ProposalAdmin(admin.ModelAdmin):
@@ -404,7 +538,7 @@ class ProposalAdmin(admin.ModelAdmin):
         ("Totals", {"fields": (("amount_subtotal", "discount_total", "amount_tax", "amount_total"),)}),
         ("Deposit", {"fields": (("deposit_type", "deposit_value", "deposit_amount"), "remaining_due")}),
         ("Signing", {"fields": ("sign_token", "token_expires_at", "sign_link_preview", "sent_at", "viewed_at", "signed_at")}),
-
+        # Remove "Validity" if your Proposal model doesn't have `valid_until`
         ("Validity", {"fields": ("valid_until",)}),
         ("Narrative (PDF)", {
             "fields": (
@@ -421,7 +555,19 @@ class ProposalAdmin(admin.ModelAdmin):
         ("Timestamps", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
     )
 
-    actions = ["action_generate_link", "action_mark_sent", "action_mark_signed", "action_mark_countersigned", "action_make_deposit_invoice", "action_create_project", "action_recompute_hours",]
+    actions = [
+        # Proposal-specific verify/revoke (module-scope)
+        mark_proposal_discount_verified,
+        revoke_proposal_discount_verified,
+        # Utility actions
+        "action_generate_link",
+        "action_mark_sent",
+        "action_mark_signed",
+        "action_mark_countersigned",
+        "action_make_deposit_invoice",
+        "action_create_project",
+        "action_recompute_hours",
+    ]
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         field = super().formfield_for_foreignkey(db_field, request, **kwargs)
@@ -474,14 +620,11 @@ class ProposalAdmin(admin.ModelAdmin):
     def action_recompute_hours(self, request, queryset):
         updated = 0
         for p in queryset:
-            # If you created ProposalLineItem.line_hours earlier, this is fast:
             sub = p.line_items.aggregate(s=Sum("line_hours"))["s"]
             if sub is None:
-                # fallback if line_hours isn't present:
                 sub = 0
                 for li in p.line_items.all():
                     sub += (li.hours or 0) * (li.quantity or 0)
-
             sub = Decimal(sub or 0)
             tot = sub + Decimal("8.00")
             p.hours_subtotal = sub
@@ -532,7 +675,7 @@ class ProposalAdmin(admin.ModelAdmin):
             if inv is not None:
                 created += 1
         self.message_user(request, f"Created {created} deposit invoice(s).", level=messages.SUCCESS)
-    
+
     @admin.action(description="Create Project (from signed)")
     @transaction.atomic
     def action_create_project(self, request, queryset):
@@ -559,6 +702,7 @@ class ProposalAdmin(admin.ModelAdmin):
         msg = f"Created {created} project(s)."
         if skipped_unsigned:
             msg += f" Skipped {skipped_unsigned} (not signed)."
+            # noqa
         if skipped_existing:
             msg += f" Skipped {skipped_existing} (already had a project)."
         self.message_user(request, msg, level=messages.SUCCESS if created else messages.INFO)

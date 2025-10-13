@@ -125,12 +125,12 @@ PROSPECTS_CLIENT_MODEL = "companyApp.Company"
 # Base URL of your future signing page (view will look up Proposal by token)
 # PROPOSAL_SIGNING_URL_BASE = "https://portal.bedev-services.com/p"
 PROPOSAL_SIGNING_URL_BASE = "http://127.0.0.1:8000/p"
-PROPOSAL_MESSENGER = "proposalApp.messenger:send_proposal"
+PROPOSAL_MESSENGER = "proposalApp.messaging.messenger:send_proposal"
 
 # Dotted-callables (set now or later)
-PROPOSAL_ACCOUNT_CREATOR = "proposalApp.hooks:create_account_for_signed_proposal"
-PROPOSAL_INVOICE_CREATOR = "proposalApp.hooks:create_invoice_for_deposit"
-PROPOSAL_MESSENGER       = "proposalApp.hooks:send_proposal_email"
+PROPOSAL_ACCOUNT_CREATOR = "proposalApp.services.hooks:create_account_for_signed_proposal"
+PROPOSAL_INVOICE_CREATOR = "proposalApp.services.hooks:create_invoice_for_deposit"
+PROPOSAL_MESSENGER       = "proposalApp.services.hooks:send_proposal_email"
 
 # Branding for PDFs (and other templates)
 BRAND_NAME = "BeeDev Services"
@@ -144,7 +144,7 @@ BRAND_ADDRESS = "Wappingers Falls, NY 12590"
 
 # Email Settings
 # EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_BACKEND = 'proposalApp.email_backend.GmailEmailBackend'
+EMAIL_BACKEND = 'proposalApp.messaging.email_backend.GmailEmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_USE_TLS = True
 EMAIL_PORT = 587

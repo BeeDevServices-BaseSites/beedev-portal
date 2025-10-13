@@ -1,7 +1,7 @@
 # proposalApp/urls_public.py
 from django.urls import path
-from . import views
-from .views import *
+from .. import views
+from ..views import *
 
 app_name = "proposal_public"
 
