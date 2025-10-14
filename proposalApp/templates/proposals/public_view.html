@@ -109,11 +109,21 @@
         </tr>
         <tr>
           <td>
-            <div class="sig-line"></div>
+            <div class="sig-line">
+              {% if proposal.countersigned_at %}
+                {% with signer=proposal.countersigned_by.get_full_name|default:proposal.countersigned_by.email %}
+                  <span class="sig-hand">{{ signer }}</span>
+                {% endwith %}
+              {% endif %}
+            </div>
             <div class="sig-label">BeeDev Services Representative</div>
           </td>
           <td>
-            <div class="sig-line"></div>
+            <div class="sig-line">
+              {% if proposal.countersigned_at %}
+                {{ proposal.countersigned_at|date:"M j, Y" }}
+              {% endif %}
+            </div>
             <div class="sig-label">Date</div>
           </td>
         </tr>
