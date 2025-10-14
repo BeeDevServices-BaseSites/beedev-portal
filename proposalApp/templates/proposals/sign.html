@@ -19,7 +19,12 @@
       {{ form.full_name }}
     </div>
     <div style="margin:.5rem 0;">
-      <label>{{ form.accept }} {{ form.accept.label }}</label>
+      <label>
+        {{ form.agree_e_records }} I agree to receive and sign this proposal electronically.
+      </label>
+      <label>
+        {{ form.agree_intent }} I intend to sign this proposal.
+      </label>
     </div>
     <button type="submit">Sign</button>
   </form>

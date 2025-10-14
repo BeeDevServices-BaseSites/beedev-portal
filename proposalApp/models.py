@@ -415,6 +415,27 @@ class ProposalDraft(models.Model):
         if self.approved_by_id and not getattr(prop, "approver_user_id", None):
             prop.approver_user_id = self.approved_by_id
             prop.save(update_fields=["approver_user"])
+        
+        if not self.is_pre_signed and self.approved_by_id:
+            prop.countersigned_at = self.approved_at or timezone.now()
+            prop.countersigned_by = self.approved_by
+            prop.countersign_required = False  # company has already signed
+            prop.save(update_fields=["countersigned_at", "countersigned_by", "countersign_required"])
+
+            if getattr(prop, "pdf", None) and prop.pdf:
+                prop._stamp_company_signature_on_pdf()
+
+            # Optional: record an audit entry for clarity
+            ProposalEvent.objects.create(
+                proposal=prop,
+                kind=ProposalEvent.Kind.UPDATED,
+                actor=self.approved_by,
+                data={
+                    "auto_countersigned_from_draft_approval": True,
+                    "approved_at": (self.approved_at or timezone.now()).isoformat(),
+                    "approver_email": getattr(self.approved_by, "email", None),
+                },
+            )
 
         for li in self.items.all().order_by("sort_order", "pk"):
             ProposalLineItem.objects.create(
@@ -492,11 +513,7 @@ class ProposalDraft(models.Model):
 
             # If there is already a stored PDF, stamp it with the company signature
             if getattr(prop, "pdf", None) and prop.pdf:
-                from django.core.files.base import ContentFile
-                from proposalApp.services import pdf_stamp
-
-                fname, data = pdf_stamp.overlay_signature_on_last_page(prop, self.pre_signed_by)  # or append_certificate
-                prop.pdf.save(fname, ContentFile(data))
+                prop._stamp_company_signature_on_pdf()
 
         self.approval_status = self.ApprovalStatus.CONVERTED
         self.save(update_fields=["approval_status", "updated_at"])
@@ -796,6 +813,33 @@ class Proposal(models.Model):
             payload = ev.data.get("signature") or ev.data
             signer_name = (payload.get("full_name") or payload.get("name") or "").strip() or None
         return {"signed_at": self.signed_at, "signer_name": signer_name}
+    
+    def get_company_signature_info(self) -> dict:
+        """
+        Returns {'name': str|None, 'email': str|None, 'image_path': str|None, 'at': datetime|None}.
+        Prefers a stored event payload, falls back to countersigned_* fields.
+        """
+        # Prefer an event payload we wrote when pre-signing/converting
+        ev = self.events.filter(
+            models.Q(data__has_key="company_signature") | models.Q(data__signature__role="COMPANY")
+        ).order_by("-at").first()
+
+        if ev:
+            payload = ev.data.get("company_signature") or ev.data.get("signature") or {}
+            return {
+                "name":  payload.get("full_name") or (getattr(self.countersigned_by, "get_full_name", lambda: "")() or getattr(self.countersigned_by, "email", None)),
+                "email": payload.get("email") or getattr(self.countersigned_by, "email", None),
+                "image_path": payload.get("signature_image"),
+                "at":   self.countersigned_at or ev.at,
+            }
+
+        # Fallback: just use countersigned fields
+        return {
+            "name":  getattr(self.countersigned_by, "get_full_name", lambda: "")() or getattr(self.countersigned_by, "email", None),
+            "email": getattr(self.countersigned_by, "email", None),
+            "image_path": None,
+            "at":   self.countersigned_at,
+        }
 
     def create_deposit_invoice(self, *, actor=None, due_date=None, customer_user=None):
         from invoiceApp.models import Invoice
@@ -807,6 +851,104 @@ class Proposal(models.Model):
             customer_user=customer_user,
         )
         return inv
+    
+    def _stamp_company_signature_on_pdf(self) -> bool:
+        """
+        Overlay a signature-like box on the last page of the existing PDF using
+        the countersigned_by name and countersigned_at timestamp.
+        Saves a new PDF (new storage path) into self.pdf.
+        Returns True on success, False if skipped/failed.
+        """
+        # Only run if we have a PDF and a countersign
+        if not getattr(self, "pdf", None) or not self.pdf or not self.countersigned_by_id:
+            return False
+
+        try:
+            from io import BytesIO
+            from django.core.files.base import ContentFile
+            from reportlab.pdfgen import canvas
+            from reportlab.lib.units import inch
+            from reportlab.pdfbase import pdfmetrics
+            from reportlab.pdfbase.ttfonts import TTFont
+            from PyPDF2 import PdfReader, PdfWriter
+
+            # Read base PDF
+            self.pdf.open("rb")
+            base_bytes = self.pdf.read()
+            self.pdf.close()
+
+            reader = PdfReader(BytesIO(base_bytes))
+            if not reader.pages:
+                return False
+
+            last = reader.pages[-1]
+            w = float(last.mediabox.right) - float(last.mediabox.left)
+            h = float(last.mediabox.top) - float(last.mediabox.bottom)
+
+            # Build overlay
+            overlay_buf = BytesIO()
+            c = canvas.Canvas(overlay_buf, pagesize=(w, h))
+
+            # Optional: script font path via settings.COMPANY_SIGNATURE_TTF (falls back to Helvetica-Oblique)
+            font_name = "Helvetica-Oblique"
+            ttf_path = getattr(settings, "COMPANY_SIGNATURE_TTF", None)
+            if ttf_path:
+                try:
+                    pdfmetrics.registerFont(TTFont("CompanyScript", ttf_path))
+                    font_name = "CompanyScript"
+                except Exception:
+                    pass  # keep fallback
+
+            signer = (
+                getattr(self.countersigned_by, "get_full_name", lambda: "")()
+                or getattr(self.countersigned_by, "email", None)
+                or "Authorized Signer"
+            )
+            ts = timezone.localtime(self.countersigned_at or timezone.now()).strftime("%b %d, %Y %I:%M %p %Z")
+
+            pad = 0.6 * inch
+            box_h = 1.4 * inch
+
+            # Signature box rectangle
+            c.setLineWidth(1)
+            c.rect(pad, pad, w - 2 * pad, box_h, stroke=1, fill=0)
+
+            # Big name (signature-like)
+            c.setFont(font_name, 24)
+            c.drawString(pad + 0.2 * inch, pad + box_h - 0.5 * inch, signer)
+
+            # Labels
+            c.setFont("Helvetica", 10)
+            c.drawString(pad + 0.2 * inch, pad + box_h - 0.85 * inch, "BeeDev Services — Company Countersignature")
+            c.drawString(pad + 0.2 * inch, pad + 0.35 * inch, f"Date: {ts}  •  Becomes fully executed upon client signature.")
+
+            c.save()
+            overlay_reader = PdfReader(BytesIO(overlay_buf.getvalue()))
+            last.merge_page(overlay_reader.pages[0])
+
+            # Write output PDF
+            out = BytesIO()
+            writer = PdfWriter()
+            for page in reader.pages:
+                writer.add_page(page)
+            writer.write(out)
+
+            # Save to a new file path to avoid stale caches
+            new_name = proposal_pdf_upload_to(self, f"countersigned-{uuid.uuid4().hex}.pdf")
+            self.pdf.save(new_name, ContentFile(out.getvalue()))
+            self.save(update_fields=["pdf", "updated_at"])
+            return True
+
+        except Exception as e:
+            try:
+                ProposalEvent.objects.create(
+                    proposal=self,
+                    kind=ProposalEvent.Kind.UPDATED,
+                    data={"warning": f"PDF countersign overlay failed: {e!r}"}
+                )
+            except Exception:
+                pass
+            return False
     
     @property
     def countersign_due(self) -> bool:

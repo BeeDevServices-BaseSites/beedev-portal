@@ -98,16 +98,28 @@
             <div class="sig-label">Date</div>
           </td>
         </tr>
+          {# --- BEGIN Company signature line block --- #}
         <tr>
           <td>
-            <div class="sig-line"></div>
-            <div class="sig-label">BeeDev Services Representative</div>
+            <div class="sig-line">
+              {% if company_signature.signed %}
+                <span class="sig-hand">{{ company_signature.name }}</span>
+              {% endif %}
+            </div>
+            <div class="sig-label">
+              {% if company_signature.signed %}
+                 BeeDev Services Representative
+              {% else %}
+                Company representative
+              {% endif %}
+            </div>
           </td>
           <td>
-            <div class="sig-line"></div>
+            <div class="sig-line">{{ company_signature.signed_at|date:"M j, Y" }}</div>
             <div class="sig-label">Date</div>
           </td>
         </tr>
+        {# --- END Company signature line block --- #}
       </table>
     </section>
   </body>

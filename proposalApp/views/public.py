@@ -9,7 +9,7 @@ from ..models import Proposal
 from core.utils.context import base_ctx
 from django import forms
 from django.urls import reverse
-from proposalApp.services.signature import save_user_signature, compute_proposal_hash
+from proposalApp.services.signature import save_signature_image_for_proposal, hash_current_document
 
 def _client_ip(request):
     xff = request.META.get("HTTP_X_FORWARDED_FOR")
@@ -111,12 +111,22 @@ def public_proposal_sign(request, token: str):
     if request.method == "POST":
         form = SignProposalForm(request.POST)
         if form.is_valid():
+            full_name = form.cleaned_data["full_name"].strip()
+            sig_path = save_signature_image_for_proposal(p, full_name)
             payload = {
-                "full_name": form.cleaned_data["full_name"],
-                "accepted_terms": True,
-                "signed_via": "public",
-                "user_agent": request.META.get("HTTP_USER_AGENT", ""),
-                "signed_at_iso": timezone.now().isoformat(),
+                "role": "CLIENT",
+                "full_name": full_name,
+                "email": p.contact_email,  # or form.cleaned_data.get("email") if you collect it
+                "signature_image": sig_path,
+                "ip": _client_ip(request),
+                "ua": request.META.get("HTTP_USER_AGENT", ""),
+                "consents": {
+                    "e_record_consent": bool(form.cleaned_data["agree_e_records"]),
+                    "intent_confirmed": bool(form.cleaned_data["agree_intent"]),
+                    "terms_version": timezone.now().date().isoformat(),  # revise if you version terms
+                },
+                "doc_hash": hash_current_document(p),
+                "signed_at": timezone.now().isoformat(),
             }
             # This will also create a deposit invoice via your existing mark_signed()
             p.mark_signed(

@@ -15,6 +15,11 @@ class BaseDraftNoteFS(BaseInlineFormSet):
             if not subj and not body:
                 form.cleaned_data["DELETE"] = True
 
+class SignProposalForm(forms.Form):
+    full_name = forms.CharField(max_length=160)
+    agree_e_records = forms.BooleanField(label="I agree to use electronic records/signatures", required=True)
+    agree_intent     = forms.BooleanField(label="I intend to sign this proposal", required=True)
+
 # -------------------------
 # Draft header form (create & edit)
 # -------------------------

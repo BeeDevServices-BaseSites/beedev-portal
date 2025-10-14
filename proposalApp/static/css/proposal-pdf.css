@@ -201,3 +201,11 @@ body main #pdf-like-root .doc-header {
   color: #555;
   margin-top: 3pt;
 }
+.sig-hand {
+  left: 6px;
+  bottom: -6px;
+  font-size: 20px;
+  font-family: "Great Vibes", "Pacifico", "Dancing Script", "Segoe Script", cursive;
+  line-height: 1;
+  white-space: nowrap;
+}
