@@ -11,14 +11,27 @@
   <div class="mini_menu">
     <h2><a href="{{ back_url }}">&larr; Back to proposal</a></h2>
   </div>
-  <p>Please confirm your signature below.</p>
-  <form method="post">
+  <p>Please confirm with your signature below.</p>
+  <form method="post" class="sign">
     {% csrf_token %}
-    <div style="margin:.5rem 0;">
+    <div class="altbox">
       {{ form.full_name.label_tag }}<br>
       {{ form.full_name }}
     </div>
-    <div style="margin:.5rem 0;">
+    <div class="altbox">
+      <label for="id_contact_email">Email for the signed copy</label><br>
+      <input
+        type="email"
+        id="id_contact_email"
+        name="contact_email"
+        value="{{ proposal.contact_email }}"
+        placeholder="you@example.com"
+      >
+    </div>
+    <div class="altbox">
+        We’ll email the fully executed PDF and your account-setup link to this address. Please use the main email for the company you can add other users later.
+      </div>
+    <div class="altbox">
       <label>
         {{ form.agree_e_records }} I agree to receive and sign this proposal electronically.
       </label>

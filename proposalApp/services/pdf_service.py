@@ -1,4 +1,4 @@
-# proposalApp/pdf.py
+# proposalApp/pdf_service.py
 import os
 from io import BytesIO
 from decimal import Decimal
@@ -13,8 +13,6 @@ from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.units import inch
-
-
 from weasyprint import HTML, CSS
 
 try:
@@ -25,7 +23,7 @@ except Exception:
     def _md_html(text: str) -> str:
         return (text or "").replace("\n", "<br>")
 
-COMPANY_SIGNATURE_STAMP_ENABLED = bool(getattr(settings, "COMPANY_SIGNATURE_STAMP_ENABLED", True))
+COMPANY_SIGNATURE_STAMP_ENABLED = bool(getattr(settings, "COMPANY_SIGNATURE_STAMP_ENABLED", False))
 
 DOMAIN_TEXT = getattr(settings, "PROPOSAL_DOMAIN_TEXT",
     "DNS Handling (included in 1st year) and Domain Renewals and record upkeep (optional for subsequent years or as needed)")
@@ -33,9 +31,6 @@ HOSTING_FALLBACK_TEXT = getattr(settings, "PROPOSAL_HOSTING_FALLBACK_TEXT",
     "$20 (monthly) or $200 (annually)")
 
 def _company_signature_ctx(proposal) -> dict:
-    """
-    Minimal info for the template to render the company signature inline.
-    """
     info = {"signed": False, "name": None, "signed_at": None}
     try:
         if getattr(proposal, "countersigned_by_id", None) and proposal.countersigned_at:
@@ -121,7 +116,6 @@ def apply_company_signature_stamp(pdf_bytes: bytes, proposal) -> bytes:
         # Fail-safe: if anything goes wrong, return the original bytes
         return pdf_bytes or b""
 
-
 def _static_css(paths):
     css_objs = []
     for p in paths:
@@ -170,14 +164,12 @@ def _pdf_context(proposal) -> dict:
     proposal_date = (proposal.created_at or timezone.now()).date()
     total = getattr(proposal, "amount_total", Decimal("0.00"))
 
-
     summary_md = ""
     try:
         summary_md = getattr(getattr(proposal, "summary", None), "body_md", "") or ""
     except Exception:
         pass
     summary_html = _md_html(summary_md)
-
 
     notes_blocks = []
     for n in getattr(proposal, "notes", []).all() if hasattr(proposal, "notes") else []:
@@ -187,10 +179,8 @@ def _pdf_context(proposal) -> dict:
                 "body_html": _md_html(n.body_md or ""),
             })
 
-
     hosting_auto = _hosting_line(proposal)
     hosting_text = hosting_auto or HOSTING_FALLBACK_TEXT
-
 
     valid_until = _valid_until(proposal)
     days_valid = (valid_until - proposal_date).days
@@ -242,7 +232,8 @@ def generate_proposal_pdf(
     css_list = _static_css(css_static_paths or ["css/proposal-pdf.css"])
 
     pdf_bytes = HTML(string=html_string, base_url=base_url).write_pdf(stylesheets=css_list)
-    pdf_bytes = apply_company_signature_stamp(pdf_bytes, proposal)
+    if COMPANY_SIGNATURE_STAMP_ENABLED:
+        pdf_bytes = apply_company_signature_stamp(pdf_bytes, proposal)
 
     subdir, filename = _build_filename(proposal, overwrite=overwrite, storage=storage)
     storage_path = os.path.join(subdir, filename)
