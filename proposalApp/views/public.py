@@ -14,6 +14,11 @@ from django.urls import reverse, NoReverseMatch
 from proposalApp.services.signature import save_signature_image_for_proposal, hash_current_document
 from urllib.parse import urlencode
 from proposalApp.services.pdf_service import generate_proposal_pdf
+from proposalApp.forms import SignProposalForm
+from proposalApp.services.pdf_service import generate_proposal_pdf
+
+# URL = "https://portal.beedev-services.com/"
+URL = "127.0.0.1:8000"
 
 def _client_ip(request):
     xff = request.META.get("HTTP_X_FORWARDED_FOR")
@@ -89,6 +94,7 @@ def _send_signed_confirmation(proposal, *, to_email: str | None):
     subject = f"Fully Executed Proposal: {proposal.title} — {proposal.company.name}"
     signup_url = _account_signup_link(getattr(proposal, "contact_email", None))
     pdf_url = getattr(getattr(proposal, "pdf", None), "url", None)
+    pdf_url = URL + pdf_url
 
     lines = [
         f"Hi {proposal.contact_name or ''}".strip() or "Hello,",
@@ -97,6 +103,7 @@ def _send_signed_confirmation(proposal, *, to_email: str | None):
     ]
     if pdf_url:
         lines.append(f"- Signed PDF: {pdf_url}")
+        print(lines)
     if signup_url:
         lines.append(f"- Create your account: {signup_url}")
     lines += [
@@ -130,10 +137,6 @@ def _send_signed_confirmation(proposal, *, to_email: str | None):
     except Exception:
         pass
 
-class SignProposalForm(forms.Form):
-    full_name = forms.CharField(max_length=160, label="Your full name")
-    accept    = forms.BooleanField(label="I agree to the proposal and terms")
-
 @require_http_methods(["GET"])
 def public_proposal_view(request, token: str):
     p = get_object_or_404(Proposal, sign_token=token)
@@ -162,11 +165,22 @@ def public_proposal_sign(request, token: str):
         return render(request, "proposals/signed.html", {"proposal": p, **_common_page_ctx(p, f"Thank you!")})
 
     if request.method == "POST":
-        form = SignProposalForm(request.POST)
+        form = SignProposalForm(request.POST, proposal=p)
         if form.is_valid():
+            contact_email = (form.cleaned_data.get("contact_email") or "").strip()
+            full_name = (form.cleaned_data.get("full_name") or "").strip()
+            if contact_email and contact_email != (p.contact_email or "").strip():
+                p.contact_email = contact_email
+                p.save(update_fields=["contact_email"])
+            if full_name and full_name != (p.contact_name or "").strip():
+                p.contact_name = full_name
+                p.save(update_fields=["contact_name"])
+
             payload = {
                 "full_name": form.cleaned_data["full_name"],
                 "accepted_terms": True,
+                "agreed_e_records": form.cleaned_data.get("agree_e_records", False),
+                "agreed_intent": form.cleaned_data.get("agree_intent", False),
                 "signed_via": "public",
                 "user_agent": request.META.get("HTTP_USER_AGENT", ""),
                 "signed_at_iso": timezone.now().isoformat(),
@@ -181,7 +195,8 @@ def public_proposal_sign(request, token: str):
             )
 
             try:
-                generate_proposal_pdf(p, request=request, overwrite=True, delete_old=True)
+                base_url = request.build_absolute_uri("/")
+                generate_proposal_pdf(p, base_url=base_url, request=request, overwrite=True, delete_old=True)
             except Exception:
                 pass
 

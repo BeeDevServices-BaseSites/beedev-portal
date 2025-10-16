@@ -7,16 +7,9 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 def _extract_sender_name_and_title(sender_user):
-    """
-    Returns (name, title) using existing fields only.
-    - name: full_name -> first/last -> username/email
-    - title: user.profile.job_title (or similar) -> role display -> groups
-    - defaults: title -> 'Engineering Team'
-    """
     if not sender_user:
         return None, "Engineering Team"
 
-    # --- name ---
     name = ""
     try:
         name = (sender_user.get_full_name() or "").strip()
@@ -29,9 +22,8 @@ def _extract_sender_name_and_title(sender_user):
     if not name:
         name = getattr(sender_user, "username", "") or getattr(sender_user, "email", "")
 
-    # --- job title (prefer profile.job_title) ---
     def _find_job_title(u):
-        # Try common locations in your project
+
         for path in ("profile.job_title", "employee_profile.job_title", "job_title"):
             node = u
             try:

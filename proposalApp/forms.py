@@ -16,13 +16,39 @@ class BaseDraftNoteFS(BaseInlineFormSet):
                 form.cleaned_data["DELETE"] = True
 
 class SignProposalForm(forms.Form):
-    full_name = forms.CharField(max_length=160)
-    agree_e_records = forms.BooleanField(label="I agree to use electronic records/signatures", required=True)
-    agree_intent     = forms.BooleanField(label="I intend to sign this proposal", required=True)
+    full_name = forms.CharField(
+        max_length=160,
+        required=True,
+        label="Your full name",
+        widget=forms.TextInput(attrs={"placeholder": "Jane Doe"})
+    )
+    contact_email = forms.EmailField(
+        required=False,
+        label="Email for the signed copy",
+        widget=forms.EmailInput(attrs={"placeholder": "you@example.com"})
+    )
+    agree_e_records = forms.BooleanField(
+        required=True,
+        label="I agree to receive and sign this proposal electronically.",
+        widget=forms.CheckboxInput(attrs={"class": "checkbox"})
+    )
+    agree_intent = forms.BooleanField(
+        required=True,
+        label="I intend to sign this proposal.",
+        widget=forms.CheckboxInput(attrs={"class": "checkbox"})
+    )
+    def __init__(self, *args, **kwargs):
+        self.proposal = kwargs.pop("proposal", None)
+        super().__init__(*args, **kwargs)
+        if self.proposal and not self.initial.get("contact_email"):
+            self.initial["contact_email"] = getattr(self.proposal, "contact_email", "")
 
-# -------------------------
-# Draft header form (create & edit)
-# -------------------------
+    def clean_full_name(self):
+        name = (self.cleaned_data.get("full_name") or "").strip()
+        if len(name) < 2:
+            raise forms.ValidationError("Please enter your full name.")
+        return name
+
 class DraftForm(forms.ModelForm):
     class Meta:
         model = ProposalDraft

@@ -32,11 +32,15 @@
         We’ll email the fully executed PDF and your account-setup link to this address. Please use the main email for the company you can add other users later.
       </div>
     <div class="altbox">
-      <label>
-        {{ form.agree_e_records }} I agree to receive and sign this proposal electronically.
+      <label for="{{ form.agree_e_records.id_for_label }}">
+        {{ form.agree_e_records }}
+        I agree to receive and sign this proposal electronically.
       </label>
-      <label>
-        {{ form.agree_intent }} I intend to sign this proposal.
+    </div>
+    <div class="altbox">
+      <label for="{{ form.agree_intent.id_for_label }}">
+        {{ form.agree_intent }}
+        I intend to sign this proposal.
       </label>
     </div>
     <button type="submit">Sign</button>

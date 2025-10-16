@@ -88,16 +88,24 @@
     <section class="section signatures">
       <h2>Acceptance</h2>
       <table class="sig-table">
+        {# --- BEGIN Client signature line block ---#}
         <tr>
           <td>
-            <div class="sig-line"></div>
+            <div class="sig-line">
+              {% if client_signature.signed %}
+                <span class="sig-hand">{{client_signature.name}}</span>
+              {% else %}
+              Signature needed
+              {% endif %}
+            </div>
             <div class="sig-label">Client Signature ({{ company_name }})</div>
           </td>
           <td>
-            <div class="sig-line"></div>
+            <div class="sig-line">{{ client_signature.signed_at|date:"M j, Y" }}</div>
             <div class="sig-label">Date</div>
           </td>
         </tr>
+        {# --- END Client signature line block ---#}
           {# --- BEGIN Company signature line block --- #}
         <tr>
           <td>

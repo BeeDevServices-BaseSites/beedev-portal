@@ -48,6 +48,19 @@ def _company_signature_ctx(proposal) -> dict:
         pass
     return info
 
+def _client_signature_ctx(proposal) -> dict:
+    info = {"signed": False, "name": None, "signed_at": None}
+    try:
+        if getattr(proposal, "contact_name", None) and proposal.signed_at:
+            info.update({
+                "signed": True,
+                "name": proposal.contact_name,
+                "signed_at": timezone.localtime(proposal.signed_at),
+            })
+    except Exception:
+        pass
+    return info
+
 def apply_company_signature_stamp(pdf_bytes: bytes, proposal) -> bytes:
     try:
         if not pdf_bytes:
@@ -188,6 +201,9 @@ def _pdf_context(proposal) -> dict:
     remaining = getattr(proposal, "remaining_due", Decimal("0.00"))
     hours_total = getattr(proposal, "hours_total", Decimal("0.00"))
 
+
+    print(proposal)
+
     return {
         "company_name": str(company),
         "proposal_date": proposal_date,
@@ -202,6 +218,7 @@ def _pdf_context(proposal) -> dict:
         "remaining_due": remaining,
         "hours_total": hours_total,
         "company_signature": _company_signature_ctx(proposal),
+        "client_signature": _client_signature_ctx(proposal),
     }
 
 def generate_proposal_pdf(
