@@ -10,11 +10,8 @@ env.read_env()
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env('SECRET_KEY', default='dev-server-only')
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
 
 # -------- Hosts & CSRF (add your domains) --------
@@ -27,9 +24,6 @@ CSRF_TRUSTED_ORIGINS = [
     'https://www.beedev-services.com',
     'https://portal.beedev-services.com',
 ]
-
-
-# Application definition
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -85,7 +79,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'portal.wsgi.application'
 
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
@@ -97,7 +90,6 @@ DATABASES = {
     }
 }
 
-# Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -126,6 +118,10 @@ PROSPECTS_CLIENT_MODEL = "companyApp.Company"
 # PROPOSAL_SIGNING_URL_BASE = "https://portal.bedev-services.com/p"
 PROPOSAL_SIGNING_URL_BASE = "http://127.0.0.1:8000/p"
 PROPOSAL_MESSENGER = "proposalApp.messaging.messenger:send_proposal"
+
+# Base URL for final signed proposal email
+PROPOSAL_PUBLIC_BASE_URL = "http://127.0.0.1:8000"
+# PROPOSAL_PUBLIC_BASE_URL = "https://portal.beedev-services.com"
 
 # Dotted-callables (set now or later)
 PROPOSAL_ACCOUNT_CREATOR = "proposalApp.services.hooks:create_account_for_signed_proposal"
@@ -164,22 +160,12 @@ USE_I18N = True
 USE_TZ = True
 
 # -------- Static files: separate source vs. collect dir --------
-# Use /static/ as URL (leading and trailing slash)
 STATIC_URL = '/static/'
-
-# Project-level source folder for your brand CSS/logo (used in dev; collected in prod)
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
-
-# Final collect destination for production (run `collectstatic` -> served by web server/WhiteNoise)
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
-
-# Media (unchanged)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
-# Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # -------- Production hardening (safe to set; they no-op in dev) --------

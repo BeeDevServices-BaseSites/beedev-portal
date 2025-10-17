@@ -233,7 +233,6 @@ class ProposalDraft(models.Model):
         if creating:
             self.autofill_contact_from_company(force=False)
 
-        # Set the flag BEFORE saving so we only save once
         if self.discount_id:
             self.discount_requires_verification = bool(
                 getattr(self.discount, "requires_verification", False)
@@ -244,7 +243,6 @@ class ProposalDraft(models.Model):
         if self.pk and self.pre_signed_at:
             new_hash = self._contract_hash_for_presign()
             if self.pre_signature_hash and self.pre_signature_hash != new_hash:
-                # Clear pre-sign because the content changed
                 self.pre_signed_at = None
                 self.pre_signed_by = None
                 self.pre_signature_payload = None
@@ -298,7 +296,6 @@ class ProposalDraft(models.Model):
         if self.discount.kind == Discount.Kind.PERCENT:
             amt = q2(base * (self.discount.value or 0) / Decimal("100"))
         amt = q2(self.discount.value or 0)
-        # Cap at base
         return amt if amt <= base else base
 
     def compute_deposit_amount(self, grand_total: Decimal) -> Decimal:
@@ -354,8 +351,6 @@ class ProposalDraft(models.Model):
         if disc_amt > self.subtotal:
             disc_amt = self.subtotal
         self.discount_amount = q2(disc_amt)
-
-        # self.discount_amount = q2(self.compute_discount_amount(self.subtotal)) if discount_allowed else Decimal("0.00")
 
         base_total = q2(self.subtotal - self.discount_amount)
         if base_total < Decimal("0.00"):
@@ -419,13 +414,12 @@ class ProposalDraft(models.Model):
         if not self.is_pre_signed and self.approved_by_id:
             prop.countersigned_at = self.approved_at or timezone.now()
             prop.countersigned_by = self.approved_by
-            prop.countersign_required = False  # company has already signed
+            prop.countersign_required = False
             prop.save(update_fields=["countersigned_at", "countersigned_by", "countersign_required"])
 
             if getattr(prop, "pdf", None) and prop.pdf:
                 prop._stamp_company_signature_on_pdf()
 
-            # Optional: record an audit entry for clarity
             ProposalEvent.objects.create(
                 proposal=prop,
                 kind=ProposalEvent.Kind.UPDATED,
@@ -511,7 +505,6 @@ class ProposalDraft(models.Model):
             prop.countersign_required = False
             prop.save(update_fields=["countersigned_at","countersigned_by","countersign_required"])
 
-            # If there is already a stored PDF, stamp it with the company signature
             if getattr(prop, "pdf", None) and prop.pdf:
                 prop._stamp_company_signature_on_pdf()
 
@@ -526,10 +519,6 @@ class ProposalDraft(models.Model):
         return (self.valid_until or (base + timedelta(days=30))).date()
     
     def _contract_hash_for_presign(self) -> str:
-        """
-        Hash the stuff you consider 'material'. Keep it simple to start.
-        If you later want line-by-line certainty, include items data.
-        """
         parts = [
             str(self.company_id or ""),
             (self.title or ""),
@@ -802,24 +791,14 @@ class Proposal(models.Model):
         return self.signed_at
     
     def get_signature_info(self):
-        """
-        Returns {"signed_at": datetime|None, "signer_name": str|None}.
-        Pulls the most recent SIGNED event and reads the payload you already store.
-        """
         ev = self.events.filter(kind=ProposalEvent.Kind.SIGNED).order_by("-at").first()
         signer_name = None
         if ev and ev.data:
-            # mark_signed(...) stored payload under data["signature"]
             payload = ev.data.get("signature") or ev.data
             signer_name = (payload.get("full_name") or payload.get("name") or "").strip() or None
         return {"signed_at": self.signed_at, "signer_name": signer_name}
     
     def get_company_signature_info(self) -> dict:
-        """
-        Returns {'name': str|None, 'email': str|None, 'image_path': str|None, 'at': datetime|None}.
-        Prefers a stored event payload, falls back to countersigned_* fields.
-        """
-        # Prefer an event payload we wrote when pre-signing/converting
         ev = self.events.filter(
             models.Q(data__has_key="company_signature") | models.Q(data__signature__role="COMPANY")
         ).order_by("-at").first()
@@ -833,7 +812,6 @@ class Proposal(models.Model):
                 "at":   self.countersigned_at or ev.at,
             }
 
-        # Fallback: just use countersigned fields
         return {
             "name":  getattr(self.countersigned_by, "get_full_name", lambda: "")() or getattr(self.countersigned_by, "email", None),
             "email": getattr(self.countersigned_by, "email", None),
@@ -853,13 +831,6 @@ class Proposal(models.Model):
         return inv
     
     def _stamp_company_signature_on_pdf(self) -> bool:
-        """
-        Overlay a signature-like box on the last page of the existing PDF using
-        the countersigned_by name and countersigned_at timestamp.
-        Saves a new PDF (new storage path) into self.pdf.
-        Returns True on success, False if skipped/failed.
-        """
-        # Only run if we have a PDF and a countersign
         if not getattr(self, "pdf", None) or not self.pdf or not self.countersigned_by_id:
             return False
 
@@ -872,7 +843,6 @@ class Proposal(models.Model):
             from reportlab.pdfbase.ttfonts import TTFont
             from PyPDF2 import PdfReader, PdfWriter
 
-            # Read base PDF
             self.pdf.open("rb")
             base_bytes = self.pdf.read()
             self.pdf.close()
@@ -885,11 +855,9 @@ class Proposal(models.Model):
             w = float(last.mediabox.right) - float(last.mediabox.left)
             h = float(last.mediabox.top) - float(last.mediabox.bottom)
 
-            # Build overlay
             overlay_buf = BytesIO()
             c = canvas.Canvas(overlay_buf, pagesize=(w, h))
 
-            # Optional: script font path via settings.COMPANY_SIGNATURE_TTF (falls back to Helvetica-Oblique)
             font_name = "Helvetica-Oblique"
             ttf_path = getattr(settings, "COMPANY_SIGNATURE_TTF", None)
             if ttf_path:
@@ -897,7 +865,7 @@ class Proposal(models.Model):
                     pdfmetrics.registerFont(TTFont("CompanyScript", ttf_path))
                     font_name = "CompanyScript"
                 except Exception:
-                    pass  # keep fallback
+                    pass
 
             signer = (
                 getattr(self.countersigned_by, "get_full_name", lambda: "")()
@@ -909,15 +877,12 @@ class Proposal(models.Model):
             pad = 0.6 * inch
             box_h = 1.4 * inch
 
-            # Signature box rectangle
             c.setLineWidth(1)
             c.rect(pad, pad, w - 2 * pad, box_h, stroke=1, fill=0)
 
-            # Big name (signature-like)
             c.setFont(font_name, 24)
             c.drawString(pad + 0.2 * inch, pad + box_h - 0.5 * inch, signer)
 
-            # Labels
             c.setFont("Helvetica", 10)
             c.drawString(pad + 0.2 * inch, pad + box_h - 0.85 * inch, "BeeDev Services — Company Countersignature")
             c.drawString(pad + 0.2 * inch, pad + 0.35 * inch, f"Date: {ts}  •  Becomes fully executed upon client signature.")
@@ -926,14 +891,12 @@ class Proposal(models.Model):
             overlay_reader = PdfReader(BytesIO(overlay_buf.getvalue()))
             last.merge_page(overlay_reader.pages[0])
 
-            # Write output PDF
             out = BytesIO()
             writer = PdfWriter()
             for page in reader.pages:
                 writer.add_page(page)
             writer.write(out)
 
-            # Save to a new file path to avoid stale caches
             new_name = proposal_pdf_upload_to(self, f"countersigned-{uuid.uuid4().hex}.pdf")
             self.pdf.save(new_name, ContentFile(out.getvalue()))
             self.save(update_fields=["pdf", "updated_at"])
@@ -996,6 +959,18 @@ class Proposal(models.Model):
 
             proj = Project.objects.create(**kwargs)
             return proj
+    
+    def create_account_invite(self, *, email: str | None = None, hours_valid: int = 168, actor=None):
+        inv = ProposalAccountInvite.objects.create(
+            proposal=self,
+            company=self.company,
+            email=(email or self.contact_email or "").strip(),
+            created_by=actor,
+        )
+        if hours_valid and hours_valid > 0:
+            inv.expires_at = timezone.now() + timezone.timedelta(hours=hours_valid)
+            inv.save(update_fields=["expires_at"])
+        return inv
 
 class ProposalNote(models.Model):
     proposal = models.ForeignKey("Proposal", related_name="notes", on_delete=models.CASCADE)
@@ -1120,3 +1095,72 @@ class ProposalEvent(models.Model):
 
     def __str__(self):
         return f"{self.proposal} · {self.kind} @ {self.at:%Y-%m-%d %H:%M}"
+
+class ProposalAccountInvite(models.Model):
+    proposal   = models.ForeignKey("Proposal", on_delete=models.CASCADE, related_name="account_invites")
+    company    = models.ForeignKey("companyApp.Company", on_delete=models.CASCADE, related_name="proposal_account_invites")
+    email      = models.EmailField(blank=True)
+    token      = models.CharField(max_length=64, unique=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    used_at    = models.DateTimeField(null=True, blank=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="proposal_invites_created"
+    )
+    used_by    = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="proposal_invites_used"
+    )
+
+    notes      = models.CharField(max_length=240, blank=True)
+    metadata   = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"Invite {self.token[:6]}… for {self.company} / {self.proposal_id}"
+
+    def save(self, *args, **kwargs):
+        if not self.token:
+            # ~43 chars, fits into 64; unique enforced by the DB
+            self.token = secrets.token_urlsafe(32)
+        if not self.company_id and self.proposal_id:
+            self.company_id = self.proposal.company_id
+        super().save(*args, **kwargs)
+
+    @property
+    def is_used(self) -> bool:
+        return bool(self.used_at)
+
+    @property
+    def is_expired(self) -> bool:
+        return bool(self.expires_at and timezone.now() >= self.expires_at)
+
+    def is_valid(self) -> bool:
+        return (not self.is_used) and (not self.is_expired)
+
+    def mark_used(self, user=None, save=True):
+        self.used_at = timezone.now()
+        if user:
+            self.used_by = user
+        if save:
+            self.save(update_fields=["used_at", "used_by"])
+
+    def get_signup_path(self) -> str:
+        try:
+            from django.urls import reverse
+            return reverse("proposal_public:proposal_account_invite", args=[self.token])
+        except Exception:
+            base_path = getattr(settings, "PROPOSAL_ACCOUNT_INVITE_PATH", "/account/invite/")
+            if not base_path.endswith("/"):
+                base_path += "/"
+            return f"{base_path}{self.token}/"
+
+    def get_signup_url(self) -> str:
+        from urllib.parse import urljoin
+        base = getattr(settings, "PROPOSAL_PUBLIC_BASE_URL", None) or "http://127.0.0.1:8000"
+        return urljoin(base.rstrip("/") + "/", self.get_signup_path().lstrip("/"))

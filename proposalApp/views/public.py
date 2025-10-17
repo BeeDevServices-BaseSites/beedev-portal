@@ -12,13 +12,34 @@ from core.utils.context import base_ctx
 from django import forms
 from django.urls import reverse, NoReverseMatch
 from proposalApp.services.signature import save_signature_image_for_proposal, hash_current_document
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urljoin
 from proposalApp.services.pdf_service import generate_proposal_pdf
 from proposalApp.forms import SignProposalForm
 from proposalApp.services.pdf_service import generate_proposal_pdf
 
-# URL = "https://portal.beedev-services.com/"
-URL = "127.0.0.1:8000"
+def _public_base_url() -> str:
+    base = getattr(settings, "PROPOSAL_PUBLIC_BASE_URL", None)
+    if base:
+        return base.rstrip("/")
+
+    try:
+        from django.contrib.sites.models import Site
+        current = Site.objects.get_current()
+        if getattr(current, "domain", None):
+            scheme = getattr(settings, "DEFAULT_HTTP_SCHEME", "https")
+            return f"{scheme}://{current.domain}".rstrip("/")
+    except Exception:
+        pass
+
+    return "http://127.0.0.1:8000"
+
+def _abs_url(url_or_path: str | None) -> str | None:
+    if not url_or_path:
+        return None
+    if url_or_path.startswith("http://") or url_or_path.startswith("https://"):
+        return url_or_path
+    base = _public_base_url()
+    return urljoin(base + "/", url_or_path.lstrip("/"))
 
 def _client_ip(request):
     xff = request.META.get("HTTP_X_FORWARDED_FOR")
@@ -92,9 +113,14 @@ def _send_signed_confirmation(proposal, *, to_email: str | None):
         return
 
     subject = f"Fully Executed Proposal: {proposal.title} — {proposal.company.name}"
-    signup_url = _account_signup_link(getattr(proposal, "contact_email", None))
-    pdf_url = getattr(getattr(proposal, "pdf", None), "url", None)
-    pdf_url = URL + pdf_url
+    # signup_url = _account_signup_link(getattr(proposal, "contact_email", None))
+    # pdf_url = getattr(getattr(proposal, "pdf", None), "url", None)
+
+    raw_signup = _account_signup_link(getattr(proposal, "contact_email", None))
+    signup_url = _abs_url(raw_signup) if raw_signup else None
+
+    raw_pdf = getattr(getattr(proposal, "pdf", None), "url", None)
+    pdf_url = _abs_url(raw_pdf)
 
     lines = [
         f"Hi {proposal.contact_name or ''}".strip() or "Hello,",
@@ -103,7 +129,6 @@ def _send_signed_confirmation(proposal, *, to_email: str | None):
     ]
     if pdf_url:
         lines.append(f"- Signed PDF: {pdf_url}")
-        print(lines)
     if signup_url:
         lines.append(f"- Create your account: {signup_url}")
     lines += [

@@ -1,4 +1,8 @@
 # proposalApp/admin.py
+from django.core.mail import EmailMultiAlternatives
+from django.urls import reverse, NoReverseMatch
+from urllib.parse import urljoin
+from django.conf import settings
 from decimal import Decimal, ROUND_HALF_UP
 from django.contrib import admin, messages
 from django.db import transaction
@@ -31,6 +35,11 @@ from .models import (
     ProposalNote,
     ProposalSummary,
 )
+
+try:
+    from django.contrib.sites.models import Site
+except Exception:
+    Site = None
 
 # =========================
 # Permission helpers
@@ -103,7 +112,6 @@ class JobRateAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
     def has_delete_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
 
-
 @admin.register(BaseSetting)
 class BaseSettingAdmin(admin.ModelAdmin):
     list_display = ("name", "code", "base_rate", "is_active", "sort_order")
@@ -116,7 +124,6 @@ class BaseSettingAdmin(admin.ModelAdmin):
     def has_add_permission(self, request): return is_owner(request.user) or is_admin(request.user)
     def has_change_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
     def has_delete_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
-
 
 @admin.register(Discount)
 class DiscountAdmin(admin.ModelAdmin):
@@ -133,7 +140,6 @@ class DiscountAdmin(admin.ModelAdmin):
     def has_add_permission(self, request): return is_owner(request.user) or is_admin(request.user)
     def has_change_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
     def has_delete_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
-
 
 @admin.register(CatalogItem)
 class CatalogItemAdmin(admin.ModelAdmin):
@@ -152,7 +158,6 @@ class CatalogItemAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
     def has_delete_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
 
-
 @admin.register(CostTier)
 class CostTierAdmin(admin.ModelAdmin):
     list_display  = ("label", "code", "min_total", "max_total", "is_active", "sort_order")
@@ -168,7 +173,6 @@ class CostTierAdmin(admin.ModelAdmin):
     def has_add_permission(self, request): return is_owner(request.user) or is_admin(request.user)
     def has_change_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
     def has_delete_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
-
 
 # =========================
 # DRAFTS
@@ -240,7 +244,6 @@ def action_revoke_pre_sign(self, request, queryset):
             d.revoke_pre_sign(actor=request.user, reason="Admin revoke")
             n += 1
     self.message_user(request, f"Revoked pre-sign on {n} draft(s).", level=messages.SUCCESS)
-
 
 @admin.register(ProposalDraft)
 class ProposalDraftAdmin(admin.ModelAdmin):
@@ -390,7 +393,6 @@ class ProposalDraftAdmin(admin.ModelAdmin):
             created += 1
         self.message_user(request, f"Created {created} proposal(s) from selected draft(s).", level=messages.SUCCESS)
 
-
 # =========================
 # PROPOSALS
 # =========================
@@ -447,12 +449,10 @@ class ProposalSectionInline(admin.TabularInline):
     fields = ("sort_order", "subject", "body_md", "is_client_visible")
     ordering = ("sort_order", "id")
 
-
 @admin.register(ProposalSummary)
 class ProposalSummaryAdmin(admin.ModelAdmin):
     list_display = ("proposal", "is_visible_to_client", "updated_at")
     list_filter = ("is_visible_to_client",)
-
 
 @admin.register(ProposalNote)
 class ProposalNoteAdmin(admin.ModelAdmin):
@@ -461,9 +461,7 @@ class ProposalNoteAdmin(admin.ModelAdmin):
     search_fields = ("subject", "body_md")
     ordering = ("proposal", "sort_order", "pk")
 
-
 # ----- Proposal actions (module scope) -----
-
 @admin.action(description="Backfill company countersign (append certificate)")
 def action_backfill_countersign(self, request, queryset):
     user = request.user
@@ -548,6 +546,87 @@ def revoke_proposal_discount_verified(modeladmin, request, queryset):
 
         _recompute_proposal_totals(p)
 
+def _public_base_url() -> str:
+    base = getattr(settings, "PROPOSAL_PUBLIC_BASE_URL", None)
+    if base:
+        return base.rstrip("/")
+
+    if Site is not None:
+        try:
+            current = Site.objects.get_current()
+            if getattr(current, "domain", None):
+                scheme = getattr(settings, "DEFAULT_HTTP_SCHEME", "https")
+                return f"{scheme}://{current.domain}".rstrip("/")
+        except Exception:
+            pass
+
+    return "http://127.0.0.1:8000"
+
+def _abs_url(url_or_path: str | None) -> str | None:
+    if not url_or_path:
+        return None
+    if url_or_path.startswith("http://") or url_or_path.startswith("https://"):
+        return url_or_path
+    base = _public_base_url()
+    return urljoin(base + "/", url_or_path.lstrip("/"))
+
+def _account_signup_link(email: str | None) -> str | None:
+    base = getattr(settings, "PROPOSAL_ACCOUNT_SIGNUP_URL", None)
+    if not base:
+        try:
+            base = reverse("account_signup")
+        except NoReverseMatch:
+            base = None
+    if not base:
+        return None
+
+    base_abs = _abs_url(base)
+    if email:
+        sep = "&" if "?" in base_abs else "?"
+        return f"{base_abs}{sep}email={email}"
+    return base_abs
+
+def _send_links_email(proposal, *, to_email: str, include_pdf: bool, include_signup: bool) -> bool:
+    pdf_url = _abs_url(getattr(getattr(proposal, "pdf", None), "url", None)) if include_pdf else None
+    signup_url = _account_signup_link(getattr(proposal, "contact_email", None)) if include_signup else None
+
+    if not (pdf_url or signup_url):
+        return False
+
+    subject = f"Proposal Links: {proposal.title} — {proposal.company.name}"
+
+    greet = (f"Hi {proposal.contact_name}".strip() if proposal.contact_name else "Hello,")
+    lines = [greet, "", "Here are your proposal links:"]
+    if pdf_url:
+        lines.append(f"- Signed PDF: {pdf_url}")
+    if signup_url:
+        lines.append(f"- Create your account: {signup_url}")
+    lines += ["", "If you have any questions, just reply to this email.", "", "— BeeDev Services"]
+    body_txt = "\n".join(lines)
+
+    html_parts = [f"<p>{greet}</p>", "<p>Here are your proposal links:</p>", "<ul>"]
+    if pdf_url:
+        html_parts.append(f'<li>Signed PDF: <a href="{pdf_url}" target="_blank" rel="noopener">{pdf_url}</a></li>')
+    if signup_url:
+        html_parts.append(f'<li>Create your account: <a href="{signup_url}" target="_blank" rel="noopener">{signup_url}</a></li>')
+    html_parts.append("</ul><p>If you have any questions, just reply to this email.</p><p>— BeeDev Services</p>")
+    body_html = "".join(html_parts)
+
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=body_txt,
+        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+        to=[to_email],
+        cc=(getattr(settings, "PROPOSAL_CC", "") or "").split(",") if getattr(settings, "PROPOSAL_CC", "") else [],
+        bcc=(getattr(settings, "PROPOSAL_BCC", "") or "").split(",") if getattr(settings, "PROPOSAL_BCC", "") else [],
+        reply_to=[getattr(settings, "PROPOSAL_REPLY_TO", "")] if getattr(settings, "PROPOSAL_REPLY_TO", "") else None,
+    )
+    msg.attach_alternative(body_html, "text/html")
+    try:
+        msg.send(fail_silently=False)
+        return True
+    except Exception:
+        return False
 
 @admin.register(Proposal)
 class ProposalAdmin(admin.ModelAdmin):
@@ -606,10 +685,8 @@ class ProposalAdmin(admin.ModelAdmin):
     )
 
     actions = [
-        # Proposal-specific verify/revoke (module-scope)
         mark_proposal_discount_verified,
         revoke_proposal_discount_verified,
-        # Utility actions
         "action_generate_link",
         "action_mark_sent",
         "action_mark_signed",
@@ -618,6 +695,9 @@ class ProposalAdmin(admin.ModelAdmin):
         "action_create_project",
         "action_recompute_hours",
         "action_backfill_countersign",
+        "action_email_pdf_only",
+        "action_email_signup_only",
+        "action_email_pdf_and_signup",
     ]
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
@@ -666,6 +746,54 @@ class ProposalAdmin(admin.ModelAdmin):
             pass
         return "—"
     pdf_link.short_description = "PDF"
+
+    @admin.action(description="Email links → PDF only")
+    def action_email_pdf_only(self, request, queryset):
+        sent = 0
+        skipped = 0
+        for p in queryset:
+            to_email = (p.contact_email or "").strip()
+            if not to_email:
+                skipped += 1
+                continue
+            if _send_links_email(p, to_email=to_email, include_pdf=True, include_signup=False):
+                sent += 1
+        if sent:
+            self.message_user(request, f"Sent PDF link for {sent} proposal(s).", level=messages.SUCCESS)
+        if skipped:
+            self.message_user(request, f"Skipped {skipped} proposal(s) without a contact email.", level=messages.WARNING)
+
+    @admin.action(description="Email links → Account only")
+    def action_email_signup_only(self, request, queryset):
+        sent = 0
+        skipped = 0
+        for p in queryset:
+            to_email = (p.contact_email or "").strip()
+            if not to_email:
+                skipped += 1
+                continue
+            if _send_links_email(p, to_email=to_email, include_pdf=False, include_signup=True):
+                sent += 1
+        if sent:
+            self.message_user(request, f"Sent account link for {sent} proposal(s).", level=messages.SUCCESS)
+        if skipped:
+            self.message_user(request, f"Skipped {skipped} proposal(s) without a contact email.", level=messages.WARNING)
+
+    @admin.action(description="Email links → PDF + Account")
+    def action_email_pdf_and_signup(self, request, queryset):
+        sent = 0
+        skipped = 0
+        for p in queryset:
+            to_email = (p.contact_email or "").strip()
+            if not to_email:
+                skipped += 1
+                continue
+            if _send_links_email(p, to_email=to_email, include_pdf=True, include_signup=True):
+                sent += 1
+        if sent:
+            self.message_user(request, f"Sent PDF + account links for {sent} proposal(s).", level=messages.SUCCESS)
+        if skipped:
+            self.message_user(request, f"Skipped {skipped} proposal(s) without a contact email.", level=messages.WARNING)
 
     @admin.action(description="Recompute Hours (subtotal/total)")
     def action_recompute_hours(self, request, queryset):
