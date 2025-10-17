@@ -6,6 +6,10 @@ from ..forms import PortalAuthForm
 from ..models import User
 from proposalApp.models import Proposal, ProposalDraft
 from projectApp.models import Project
+from companyApp.models import CompanyMembership
+import logging
+log = logging.getLogger(__name__)
+
 
 class PortalLogin(CommonContextMixin,LoginView):
     template_name = "userApp/index.html"
@@ -31,7 +35,6 @@ def post_login(request):
     if getattr(u, "is_staff", False) or getattr(u, "role", None) == "EMPLOYEE":
         return redirect("admin:index")
 
-    # Otherwise go to client dashboard
     return redirect("userApp:client_home")
 
 @login_required
@@ -66,8 +69,52 @@ def employee_home(request):
 @login_required
 def client_home(request):
     u = request.user
+    memberships = (
+        CompanyMembership.objects
+        .filter(user=u, is_active=True)
+        .select_related("company")
+    )
+    companies_info = []
+    if not memberships.exists():
+        print(f"[DASH] {u.email} has no active company memberships")
+        log.info("[DASH] %s has no active company memberships", u.email)
+    else:
+        for m in memberships:
+            c = m.company
+
+            # All proposals for the company
+            props_all = (
+                Proposal.objects
+                .filter(company=c)
+                .only("id", "title", "created_at")
+                .order_by("-created_at")
+            )
+
+            # Proposals explicitly shared with this user (via ProposalViewer)
+            props_shared = (
+                Proposal.objects
+                .filter(company=c, allowed_viewers__user=u)
+                .only("id", "title", "created_at")
+                .distinct()
+                .order_by("-created_at")
+            )
+
+            # Print to terminal (and log)
+            print(f"[DASH] {u.email} -> Company #{c.id}: {c.name}")
+            print("       All proposals:", [(p.id, p.title) for p in props_all])
+            print("       Shared with user:", [(p.id, p.title) for p in props_shared])
+            log.info("[DASH] %s -> Company #%s: %s", u.email, c.id, c.name)
+            log.info("       All proposals: %s", [(p.id, p.title) for p in props_all])
+            log.info("       Shared with user: %s", [(p.id, p.title) for p in props_shared])
+
+            companies_info.append({
+                "company": c,
+                "proposals_all": list(props_all),
+                "proposals_shared": list(props_shared),
+            })
     ctx = {
         "user_name": u.get_full_name() or u.username,
+        "companies_info": companies_info,
     }
     title = "Dashboard"
     ctx.update(base_ctx(request, title=title))

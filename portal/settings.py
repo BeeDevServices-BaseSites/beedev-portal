@@ -120,8 +120,8 @@ PROPOSAL_SIGNING_URL_BASE = "http://127.0.0.1:8000/p"
 PROPOSAL_MESSENGER = "proposalApp.messaging.messenger:send_proposal"
 
 # Base URL for final signed proposal email
-PROPOSAL_PUBLIC_BASE_URL = "http://127.0.0.1:8000"
-# PROPOSAL_PUBLIC_BASE_URL = "https://portal.beedev-services.com"
+PROPOSAL_PUBLIC_BASE_URL = env("PROPOSAL_PUBLIC_BASE_URL", default="http://127.0.0.1:8000")
+PROPOSAL_ACCOUNT_SIGNUP_URL = os.getenv("PROPOSAL_ACCOUNT_SIGNUP_URL", "/invite/register/")
 
 # Dotted-callables (set now or later)
 PROPOSAL_ACCOUNT_CREATOR = "proposalApp.services.hooks:create_account_for_signed_proposal"

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+  {# Redirect after N seconds (defaults to /dashboard/) #}
+  <meta http-equiv="refresh" content="{{ delay_seconds|default:3 }};url={{ redirect_to|default:'/dashboard/' }}">
+
+  <link rel="stylesheet" href="{% static 'css/proposal.css' %}?v={% now 'U' %}">
+
+  <div class="container" style="max-width:720px;margin:2.5rem auto;text-align:center;">
+    <div style="margin-bottom:1rem;">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/>
+      </svg>
+    </div>
+
+    <h1 style="margin:0 0 .5rem;">You're all set!</h1>
+    <p class="muted" style="margin:0 0 1.25rem;">
+      Your account has been created{% if proposal %} and linked to
+      <strong>{{ proposal.company }}</strong> (proposal: <strong>{{ proposal.title }}</strong>){% endif %}.
+    </p>
+
+    <div class="spinner" aria-hidden="true" style="margin:1.25rem auto 1.5rem;"></div>
+
+    <p class="muted">Taking you to your dashboard…</p>
+    <p style="margin-top:.5rem;">
+      <a class="btn" href="{{ redirect_to|default:'/dashboard/' }}">Go now</a>
+    </p>
+  </div>
+
+  <style>
+    .muted { color:#666; }
+    .btn { display:inline-block; padding:.5rem .9rem; border:1px solid #ddd; border-radius:.5rem; text-decoration:none; }
+    .spinner {
+      width:28px; height:28px; border-radius:50%;
+      border:3px solid #eee; border-top-color:#333;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+
+  <script>
+    // JS fallback in case meta refresh is blocked
+    setTimeout(function () {
+      window.location.href = "{{ redirect_to|default:'/dashboard/' }}";
+    }, ({{ delay_seconds|default:3 }} * 1000));
+  </script>
+{% endblock %}

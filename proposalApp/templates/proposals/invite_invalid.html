@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% load i18n static %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/proposal.css' %}?v={% now 'U' %}">
+
+<div class="container" style="max-width:720px;margin:2rem auto;">
+  <h1 style="margin-bottom:.5rem;">Invite not valid</h1>
+  <p class="muted" style="margin-top:0;">
+    This account invitation for
+    <strong>{{ proposal.company }}</strong> (proposal: <strong>{{ proposal.title }}</strong>)
+    can’t be used.
+  </p>
+
+  {% if invite.used_at %}
+    <div class="alert alert-warning" style="margin:1rem 0;">
+      It looks like this invite was already used
+      on <strong>{{ invite.used_at|date:"F j, Y, g:i a T" }}</strong>
+      {% if invite.used_by %} by <strong>{{ invite.used_by }}</strong>{% endif %}.
+    </div>
+  {% elif invite.is_expired or invite.expires_at %}
+    <div class="alert alert-warning" style="margin:1rem 0;">
+      This invite has expired{% if invite.expires_at %} (expired on
+      <strong>{{ invite.expires_at|date:"F j, Y, g:i a T" }}</strong>){% endif %}.
+    </div>
+  {% else %}
+    <div class="alert alert-warning" style="margin:1rem 0;">
+      We couldn’t verify this invite link. It may be invalid or revoked.
+    </div>
+  {% endif %}
+
+  <p>
+    Please ask your BeeDev contact to send a fresh invite. If you believe this is an error,
+    you can still view the proposal details below.
+  </p>
+
+  <div style="display:flex;gap:.5rem;align-items:center;margin-top:1rem;">
+    <a class="btn" href="{% url 'proposal_public:proposal_public_view' proposal.sign_token %}">
+      View proposal
+    </a>
+    <a class="btn" href="/">Go to homepage</a>
+  </div>
+</div>
+
+<style>
+  .muted { color:#666; }
+  .alert { padding:.75rem 1rem; border-radius:.5rem; }
+  .alert-warning { background:#fff7e6; border:1px solid #f7d694; }
+  .btn { display:inline-block; padding:.5rem .9rem; border-radius:.5rem; border:1px solid #ddd; text-decoration:none; }
+</style>
+{% endblock %}

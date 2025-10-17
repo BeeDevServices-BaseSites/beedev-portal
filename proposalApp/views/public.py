@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.http import HttpResponseForbidden
 from django.utils.html import linebreaks
 from django.views.decorators.http import require_http_methods
-from ..models import Proposal
+from ..models import Proposal, ProposalAccountInvite
 from core.utils.context import base_ctx
 from django import forms
 from django.urls import reverse, NoReverseMatch
@@ -94,7 +94,26 @@ def _common_page_ctx(p: Proposal, title_text: str):
         "back_url": reverse("proposal_public:proposal_public_view", args=[p.sign_token]),
     }
 
-def _account_signup_link(email: str | None) -> str | None:
+def _account_signup_link(email: str | None, *, proposal=None, hours_valid: int = 168) -> str | None:
+    if proposal is not None:
+        try:
+            qs = proposal.account_invites.filter(used_at__isnull=True)
+            inv = None
+            if email:
+                inv = qs.filter(email__iexact=email).order_by("-created_at").first()
+                if inv and inv.is_expired:
+                    inv = None
+            if inv is None:
+                inv = qs.order_by("-created_at").first()
+                if inv and inv.is_expired:
+                    inv = None
+            if inv is None:
+                inv = proposal.create_account_invite(email=email, hours_valid=hours_valid)
+
+            return inv.get_signup_url()
+        except Exception:
+            pass
+
     base = getattr(settings, "PROPOSAL_ACCOUNT_SIGNUP_URL", None)
     if not base:
         try:
@@ -113,10 +132,8 @@ def _send_signed_confirmation(proposal, *, to_email: str | None):
         return
 
     subject = f"Fully Executed Proposal: {proposal.title} — {proposal.company.name}"
-    # signup_url = _account_signup_link(getattr(proposal, "contact_email", None))
-    # pdf_url = getattr(getattr(proposal, "pdf", None), "url", None)
 
-    raw_signup = _account_signup_link(getattr(proposal, "contact_email", None))
+    raw_signup = _account_signup_link(getattr(proposal, "contact_email", None), proposal=proposal)
     signup_url = _abs_url(raw_signup) if raw_signup else None
 
     raw_pdf = getattr(getattr(proposal, "pdf", None), "url", None)

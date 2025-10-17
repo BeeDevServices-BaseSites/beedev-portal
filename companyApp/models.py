@@ -16,10 +16,6 @@ def validate_logo_size(f):
         raise ValidationError(f"Logo too large (>{MAX_LOGO_BYTES//1024//1024}MB).")
 
 def logo_upload_to(instance, filename):
-    """
-    MEDIA path: company_logos/YYYY/MM/<slug>-<uuid>.<ext>
-    Uses company name if slug isn't set yet (first save).
-    """
     ext = os.path.splitext(filename)[1].lower().lstrip(".") or "png"
     if ext not in ALLOWED_LOGO_EXTS:
         ext = "png"
@@ -32,14 +28,12 @@ def logo_upload_to(instance, filename):
 #                              COMPANY
 # =======================================================================
 class Company(models.Model):
-    # Account-level status
     class Status(models.TextChoices):
         PROSPECT = "PROSPECT", "Prospect"
         CONVERTED_PROSPECT = "CONVERTED_PROSPECT", "Converted Prospect"
         ACTIVE   = "ACTIVE",   "Active"
         INACTIVE = "INACTIVE", "Inactive"
 
-    # Project/pipeline status
     class PipelineStatus(models.TextChoices):
         NEW         = "NEW",         "New"
         HOLDING     = "HOLDING",     "Holding"
@@ -51,7 +45,6 @@ class Company(models.Model):
     name  = models.CharField(max_length=200, unique=True)
     slug  = models.SlugField(max_length=220, unique=True, blank=True)
 
-    # convenience M2M via membership
     users = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         through="CompanyMembership",
@@ -59,12 +52,10 @@ class Company(models.Model):
         blank=True,
     )
 
-    # Pre-account primary contact info
     primary_contact_name = models.CharField(max_length=120, blank=True)
     primary_email        = models.EmailField(blank=True)
     phone                = models.CharField(max_length=30, blank=True)
 
-    # Address
     address_line1 = models.CharField(max_length=200, blank=True)
     address_line2 = models.CharField(max_length=200, blank=True)
     city          = models.CharField(max_length=120, blank=True)
@@ -84,7 +75,6 @@ class Company(models.Model):
         help_text="Optional external logo URL (e.g., Google Drive shared link)."
     )
 
-    # Relationship + pipeline
     status          = models.CharField(max_length=20, choices=Status.choices, default=Status.CONVERTED_PROSPECT)
     pipeline_status = models.CharField(max_length=20, choices=PipelineStatus.choices, blank=True, default="")
 
@@ -157,7 +147,6 @@ class CompanyMembership(models.Model):
 
     role = models.CharField(max_length=24, choices=Role.choices, default=Role.MEMBER)
 
-    # visibility defaults (owners/admins can still toggle per-user)
     can_view_proposals = models.BooleanField(default=False)
     can_view_invoices  = models.BooleanField(default=False)
     can_open_tickets   = models.BooleanField(default=True)
@@ -180,10 +169,6 @@ class CompanyMembership(models.Model):
 #                          COMPANY CONTACT
 # =======================================================================
 class CompanyContact(models.Model):
-    """
-    Zero or more contacts per company.
-    Optionally link to a User after they create an account.
-    """
     company   = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="contacts")
     user      = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,

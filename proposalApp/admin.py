@@ -6,7 +6,7 @@ from django.conf import settings
 from decimal import Decimal, ROUND_HALF_UP
 from django.contrib import admin, messages
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Sum, Q
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
@@ -34,6 +34,7 @@ from .models import (
     ProposalSection,
     ProposalNote,
     ProposalSummary,
+    ProposalAccountInvite
 )
 
 try:
@@ -93,6 +94,132 @@ def _recompute_proposal_totals(p: Proposal):
     p.deposit_amount = dep
     p.remaining_due = q2(p.amount_total - dep)
     p.save(update_fields=["discount_total", "amount_total", "deposit_amount", "remaining_due", "updated_at"])
+
+# =========================
+# Email Helpers
+# =========================
+
+def _public_base_url() -> str:
+    base = getattr(settings, "PROPOSAL_PUBLIC_BASE_URL", None)
+    if base:
+        return base.rstrip("/")
+
+    if Site is not None:
+        try:
+            current = Site.objects.get_current()
+            if getattr(current, "domain", None):
+                scheme = getattr(settings, "DEFAULT_HTTP_SCHEME", "https")
+                return f"{scheme}://{current.domain}".rstrip("/")
+        except Exception:
+            pass
+
+    return "http://127.0.0.1:8000"
+
+def _abs_url(url_or_path: str | None) -> str | None:
+    if not url_or_path:
+        return None
+    if url_or_path.startswith("http://") or url_or_path.startswith("https://"):
+        return url_or_path
+    base = _public_base_url()
+    return urljoin(base + "/", url_or_path.lstrip("/"))
+
+def _account_signup_link(email: str | None) -> str | None:
+    base = getattr(settings, "PROPOSAL_ACCOUNT_SIGNUP_URL", None)
+    if not base:
+        try:
+            base = reverse("user_invite:register")
+        except NoReverseMatch:
+            base = None
+    if not base:
+        try:
+            base = reverse("account_signup")
+        except NoReverseMatch:
+            base = None
+    if not base:
+        return None
+
+    base_abs = _abs_url(base)
+    if email:
+        sep = "&" if "?" in base_abs else "?"
+        return f"{base_abs}{sep}email={email}"
+    return base_abs
+
+def _send_links_email(proposal, *, to_email: str, include_pdf: bool, include_signup: bool) -> bool:
+    pdf_url = _abs_url(getattr(getattr(proposal, "pdf", None), "url", None)) if include_pdf else None
+    email_for_signup = (proposal.contact_email or to_email or "").strip() or None
+    signup_url = _proposal_invite_link(proposal) if include_signup else None
+
+    if not (pdf_url or signup_url):
+        return False
+
+    subject = f"Proposal Links: {proposal.title} — {proposal.company.name}"
+
+    greet = (f"Hi {proposal.contact_name}".strip() if proposal.contact_name else "Hello,")
+    lines = [greet, "", "Here are your proposal links:"]
+    if pdf_url:
+        lines.append(f"- Signed PDF: {pdf_url}")
+    if signup_url:
+        lines.append(f"- Create your account: {signup_url}")
+    lines += ["", "If you have any questions, just reply to this email.", "", "— BeeDev Services"]
+    body_txt = "\n".join(lines)
+
+    html_parts = [f"<p>{greet}</p>", "<p>Here are your proposal links:</p>", "<ul>"]
+    if pdf_url:
+        html_parts.append(f'<li>Signed PDF: <a href="{pdf_url}" target="_blank" rel="noopener">{pdf_url}</a></li>')
+    if signup_url:
+        html_parts.append(f'<li>Create your account: <a href="{signup_url}" target="_blank" rel="noopener">{signup_url}</a></li>')
+    html_parts.append("</ul><p>If you have any questions, just reply to this email.</p><p>— BeeDev Services</p>")
+    body_html = "".join(html_parts)
+
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=body_txt,
+        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+        to=[to_email],
+        cc=(getattr(settings, "PROPOSAL_CC", "") or "").split(",") if getattr(settings, "PROPOSAL_CC", "") else [],
+        bcc=(getattr(settings, "PROPOSAL_BCC", "") or "").split(",") if getattr(settings, "PROPOSAL_BCC", "") else [],
+        reply_to=[getattr(settings, "PROPOSAL_REPLY_TO", "")] if getattr(settings, "PROPOSAL_REPLY_TO", "") else None,
+    )
+    msg.attach_alternative(body_html, "text/html")
+    try:
+        msg.send(fail_silently=False)
+        return True
+    except Exception:
+        return False
+
+def _proposal_invite_link(proposal) -> str | None:
+    """
+    Ensure there's a valid invite for this proposal/company and return an absolute URL.
+    Reuses an unused, unexpired invite; otherwise creates a fresh one.
+    """
+    email = (proposal.contact_email or "").strip() or None
+    now = timezone.now()
+
+    inv = (
+        ProposalAccountInvite.objects
+        .filter(proposal=proposal, company=proposal.company)
+        .filter(used_at__isnull=True)
+        .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+        .order_by("-created_at")
+        .first()
+    )
+
+    # Fallback: create a new invite if none is usable
+    if not inv:
+        inv = ProposalAccountInvite.objects.create(
+            proposal=proposal,
+            company=proposal.company,
+            email=email,
+            # optionally set expires_at here if your model supports it:
+            # expires_at=now + timezone.timedelta(days=14),
+        )
+
+    try:
+        path = reverse("proposal_account_invite", args=[inv.token])
+    except NoReverseMatch:
+        path = f"/invite/{inv.token}/"
+
+    return _abs_url(path)
 
 
 # =========================
@@ -445,8 +572,7 @@ class ProposalViewerInline(admin.TabularInline):
 class ProposalSectionInline(admin.TabularInline):
     model = ProposalSection
     extra = 0
-    # If your model doesn't have `is_client_visible`, remove it from fields:
-    fields = ("sort_order", "subject", "body_md", "is_client_visible")
+    fields = ("sort_order", "subject", "body_md")
     ordering = ("sort_order", "id")
 
 @admin.register(ProposalSummary)
@@ -546,88 +672,6 @@ def revoke_proposal_discount_verified(modeladmin, request, queryset):
 
         _recompute_proposal_totals(p)
 
-def _public_base_url() -> str:
-    base = getattr(settings, "PROPOSAL_PUBLIC_BASE_URL", None)
-    if base:
-        return base.rstrip("/")
-
-    if Site is not None:
-        try:
-            current = Site.objects.get_current()
-            if getattr(current, "domain", None):
-                scheme = getattr(settings, "DEFAULT_HTTP_SCHEME", "https")
-                return f"{scheme}://{current.domain}".rstrip("/")
-        except Exception:
-            pass
-
-    return "http://127.0.0.1:8000"
-
-def _abs_url(url_or_path: str | None) -> str | None:
-    if not url_or_path:
-        return None
-    if url_or_path.startswith("http://") or url_or_path.startswith("https://"):
-        return url_or_path
-    base = _public_base_url()
-    return urljoin(base + "/", url_or_path.lstrip("/"))
-
-def _account_signup_link(email: str | None) -> str | None:
-    base = getattr(settings, "PROPOSAL_ACCOUNT_SIGNUP_URL", None)
-    if not base:
-        try:
-            base = reverse("account_signup")
-        except NoReverseMatch:
-            base = None
-    if not base:
-        return None
-
-    base_abs = _abs_url(base)
-    if email:
-        sep = "&" if "?" in base_abs else "?"
-        return f"{base_abs}{sep}email={email}"
-    return base_abs
-
-def _send_links_email(proposal, *, to_email: str, include_pdf: bool, include_signup: bool) -> bool:
-    pdf_url = _abs_url(getattr(getattr(proposal, "pdf", None), "url", None)) if include_pdf else None
-    signup_url = _account_signup_link(getattr(proposal, "contact_email", None)) if include_signup else None
-
-    if not (pdf_url or signup_url):
-        return False
-
-    subject = f"Proposal Links: {proposal.title} — {proposal.company.name}"
-
-    greet = (f"Hi {proposal.contact_name}".strip() if proposal.contact_name else "Hello,")
-    lines = [greet, "", "Here are your proposal links:"]
-    if pdf_url:
-        lines.append(f"- Signed PDF: {pdf_url}")
-    if signup_url:
-        lines.append(f"- Create your account: {signup_url}")
-    lines += ["", "If you have any questions, just reply to this email.", "", "— BeeDev Services"]
-    body_txt = "\n".join(lines)
-
-    html_parts = [f"<p>{greet}</p>", "<p>Here are your proposal links:</p>", "<ul>"]
-    if pdf_url:
-        html_parts.append(f'<li>Signed PDF: <a href="{pdf_url}" target="_blank" rel="noopener">{pdf_url}</a></li>')
-    if signup_url:
-        html_parts.append(f'<li>Create your account: <a href="{signup_url}" target="_blank" rel="noopener">{signup_url}</a></li>')
-    html_parts.append("</ul><p>If you have any questions, just reply to this email.</p><p>— BeeDev Services</p>")
-    body_html = "".join(html_parts)
-
-    msg = EmailMultiAlternatives(
-        subject=subject,
-        body=body_txt,
-        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-        to=[to_email],
-        cc=(getattr(settings, "PROPOSAL_CC", "") or "").split(",") if getattr(settings, "PROPOSAL_CC", "") else [],
-        bcc=(getattr(settings, "PROPOSAL_BCC", "") or "").split(",") if getattr(settings, "PROPOSAL_BCC", "") else [],
-        reply_to=[getattr(settings, "PROPOSAL_REPLY_TO", "")] if getattr(settings, "PROPOSAL_REPLY_TO", "") else None,
-    )
-    msg.attach_alternative(body_html, "text/html")
-    try:
-        msg.send(fail_silently=False)
-        return True
-    except Exception:
-        return False
-
 @admin.register(Proposal)
 class ProposalAdmin(admin.ModelAdmin):
     inlines = [
@@ -667,20 +711,6 @@ class ProposalAdmin(admin.ModelAdmin):
         ("Totals", {"fields": (("amount_subtotal", "discount_total", "amount_tax", "amount_total"),)}),
         ("Deposit", {"fields": (("deposit_type", "deposit_value", "deposit_amount"), "remaining_due")}),
         ("Signing", {"fields": ("sign_token", "token_expires_at", "sign_link_preview", "sent_at", "viewed_at", "signed_at")}),
-        # Remove "Validity" if your Proposal model doesn't have `valid_until`
-        ("Validity", {"fields": ("valid_until",)}),
-        ("Narrative (PDF)", {
-            "fields": (
-                "summary_md",
-                "included_md",
-                "overview_md",
-                "addons_md",
-                "maintenance_md",
-                "payment_terms_md",
-                "legal_terms_md",
-            ),
-            "classes": ("collapse",),
-        }),
         ("Timestamps", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
     )
 
