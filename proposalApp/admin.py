@@ -85,7 +85,6 @@ def _recompute_proposal_totals(p: Proposal):
     else:
         dep = Decimal("0.00")
 
-    # Cap deposit to post-discount total
     if p.amount_total <= Decimal("0.00"):
         dep = Decimal("0.00")
     elif dep > p.amount_total:
@@ -188,10 +187,6 @@ def _send_links_email(proposal, *, to_email: str, include_pdf: bool, include_sig
         return False
 
 def _proposal_invite_link(proposal) -> str | None:
-    """
-    Ensure there's a valid invite for this proposal/company and return an absolute URL.
-    Reuses an unused, unexpired invite; otherwise creates a fresh one.
-    """
     email = (proposal.contact_email or "").strip() or None
     now = timezone.now()
 
@@ -204,14 +199,11 @@ def _proposal_invite_link(proposal) -> str | None:
         .first()
     )
 
-    # Fallback: create a new invite if none is usable
     if not inv:
         inv = ProposalAccountInvite.objects.create(
             proposal=proposal,
             company=proposal.company,
             email=email,
-            # optionally set expires_at here if your model supports it:
-            # expires_at=now + timezone.timedelta(days=14),
         )
 
     try:
@@ -356,7 +348,6 @@ def action_pre_sign(self, request, queryset):
         return
     n = 0
     for d in queryset:
-        # optional: require APPROVED status first
         if d.approval_status not in (ProposalDraft.ApprovalStatus.APPROVED,):
             continue
         d.mark_pre_signed(actor=request.user, payload={"name": request.user.get_full_name() or str(request.user)})
@@ -432,10 +423,8 @@ class ProposalDraftAdmin(admin.ModelAdmin):
     )
 
     actions = [
-        # draft-specific actions
         mark_draft_discount_verified,
         revoke_draft_discount_verified,
-        # utility actions
         "action_recalc_totals",
         "action_submit_for_approval",
         "action_approve_drafts",
@@ -560,13 +549,19 @@ class ProposalViewerInline(admin.TabularInline):
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         field = super().formfield_for_foreignkey(db_field, request, **kwargs)
-        if db_field.name == "user":
+        if db_field.name == "user" and field is not None:
             prop = getattr(request, "_current_proposal_obj", None)
-            if prop and prop.pk:
-                member_user_ids = CompanyMembership.objects.filter(
+            if hasattr(User, "Roles") and hasattr(User.Roles, "CLIENT"):
+                qs = User.objects.filter(role=User.Roles.CLIENT, is_active=True)
+            else:
+                qs = User.objects.filter(is_active=True, is_staff=False, is_superuser=False)
+            if prop and getattr(prop, "pk", None):
+                member_ids = CompanyMembership.objects.filter(
                     company=prop.company, is_active=True
                 ).values_list("user_id", flat=True)
-                field.queryset = field.queryset.filter(pk__in=member_user_ids)
+                qs = qs.filter(pk__in=member_ids)
+
+            field.queryset = qs.order_by("first_name", "last_name", "email")
         return field
 
 class ProposalSectionInline(admin.TabularInline):
@@ -587,22 +582,19 @@ class ProposalNoteAdmin(admin.ModelAdmin):
     search_fields = ("subject", "body_md")
     ordering = ("proposal", "sort_order", "pk")
 
-# ----- Proposal actions (module scope) -----
 @admin.action(description="Backfill company countersign (append certificate)")
 def action_backfill_countersign(self, request, queryset):
     user = request.user
     n_ok, n_err = 0, 0
     for p in queryset:
         try:
-            # Set countersign metadata if missing
             if not p.countersigned_at:
                 p.countersigned_at = timezone.now()
                 p.countersigned_by = user
                 p.countersign_required = False
                 p.save(update_fields=["countersigned_at","countersigned_by","countersign_required","updated_at"])
 
-            fname, data = pdf_stamp.append_certificate(p, user)  # or overlay_signature_on_last_page(p, user)
-            # Save as new file (don’t overwrite original path)
+            fname, data = pdf_stamp.append_certificate(p, user)
             storage_name = proposal_pdf_upload_to(p, fname)
             default_storage.save(storage_name, ContentFile(data))
             p.pdf.name = storage_name
@@ -616,7 +608,6 @@ def action_backfill_countersign(self, request, queryset):
 def mark_proposal_discount_verified(modeladmin, request, queryset):
     now = timezone.now()
     for p in queryset:
-        # If verification fields exist on Proposal, update them:
         if hasattr(p, "is_discount_verified"):
             p.is_discount_verified = True
             if hasattr(p, "verification_checked_at"):
@@ -629,7 +620,6 @@ def mark_proposal_discount_verified(modeladmin, request, queryset):
                 *(["verification_checked_by"] if hasattr(p, "verification_checked_by") else []),
             ])
 
-        # Flip pending verification-required discounts to active
         for ad in p.applied_discounts.all():
             requires_ver = getattr(ad, "requires_verification", False)
             pending = getattr(ad, "pending_verification", False)
@@ -703,6 +693,7 @@ class ProposalAdmin(admin.ModelAdmin):
         "sign_token", "token_expires_at",
         "sign_link_preview",
         "countersigned_at", "countersigned_by",
+        "assigned_users",
     )
 
     fieldsets = (
@@ -711,6 +702,7 @@ class ProposalAdmin(admin.ModelAdmin):
         ("Totals", {"fields": (("amount_subtotal", "discount_total", "amount_tax", "amount_total"),)}),
         ("Deposit", {"fields": (("deposit_type", "deposit_value", "deposit_amount"), "remaining_due")}),
         ("Signing", {"fields": ("sign_token", "token_expires_at", "sign_link_preview", "sent_at", "viewed_at", "signed_at")}),
+        ("Access", {"fields": ("assigned_users",), "description": "Use the 'Proposal viewers' inline below to add or remove users who can access this proposal.",}),
         ("Timestamps", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
     )
 
@@ -776,6 +768,22 @@ class ProposalAdmin(admin.ModelAdmin):
             pass
         return "—"
     pdf_link.short_description = "PDF"
+
+    def assigned_users(self, obj):
+        qs = obj.allowed_viewers.select_related("user")
+        if hasattr(User, "Roles") and hasattr(User.Roles, "CLIENT"):
+            qs = qs.filter(user__role=User.Roles.CLIENT)
+        else:
+            qs = qs.filter(user__is_staff=False, user__is_superuser=False)
+
+        rows = []
+        for v in qs:
+            u = v.user
+            full = (getattr(u, "get_full_name", lambda: "")() or "").strip()
+            label = full or (u.email or str(u))
+            rows.append(f"{label} &lt;{u.email}&gt;")
+        return mark_safe("<br>".join(rows) if rows else "—")
+    assigned_users.short_description = "Assigned users"
 
     @admin.action(description="Email links → PDF only")
     def action_email_pdf_only(self, request, queryset):
@@ -911,7 +919,6 @@ class ProposalAdmin(admin.ModelAdmin):
         msg = f"Created {created} project(s)."
         if skipped_unsigned:
             msg += f" Skipped {skipped_unsigned} (not signed)."
-            # noqa
         if skipped_existing:
             msg += f" Skipped {skipped_existing} (already had a project)."
         self.message_user(request, msg, level=messages.SUCCESS if created else messages.INFO)
