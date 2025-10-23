@@ -28,18 +28,16 @@ def send_proposal_email(
     signing_url: str,
     *,
     cc: Iterable[str] = (),
-    attach_pdf: bool | None = None,   # ignored on purpose (no attachment)
+    attach_pdf: bool | None = None,
     **kwargs,
 ):
     to_list  = _parse_list(emails)
     if not to_list:
         return
 
-    # CC/BCC from env + optional per-call cc
     cc_final  = _parse_list(cc) + _parse_list(getattr(settings, "PROPOSAL_CC", ""))
     bcc_final = _parse_list(getattr(settings, "PROPOSAL_BCC", ""))
 
-    # Force a domain Reply-To so Gmail doesn’t inject the gmail.com one
     reply_to = _parse_list(getattr(settings, "PROPOSAL_REPLY_TO", "")) or [to_list[0]]
 
     subject = f"Proposal: {proposal.title} — {proposal.company.name}"
@@ -50,7 +48,7 @@ def send_proposal_email(
     msg = EmailMultiAlternatives(
         subject=subject,
         body=body_txt or strip_tags(body_html),
-        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),  # e.g. "BeeDev Services <proposals@beedev-services.com>"
+        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
         to=to_list,
         cc=cc_final or None,
         bcc=bcc_final or None,
@@ -62,7 +60,6 @@ def send_proposal_email(
 
     msg.send(fail_silently=False)
 
-    # Mark only primary recipients as delivered
     now = timezone.now()
     for r in proposal.recipients.filter(email__in=to_list):
         if not r.delivered_at:

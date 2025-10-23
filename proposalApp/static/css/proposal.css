@@ -55,6 +55,18 @@ body main .mini_menu a:hover {
   color: var(--green);
   text-decoration: underline;
 }
+body main .mini_menu .mini_form {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  align-items: flex-start;
+}
+body main .mini_menu .mini_form label,
+body main .mini_menu .mini_form input,
+body main .mini_menu .mini_form button {
+  margin: 0.4em 0;
+}
 body main table {
   width: 50%;
   margin: 1em;

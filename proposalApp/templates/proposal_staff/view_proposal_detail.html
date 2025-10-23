@@ -10,7 +10,7 @@
 <div class="mini_menu">
     <h2><a href="{% url 'userApp:employee_home' %}">Dashboard</a></h2>
     <h2><a href="{% url 'proposal_staff:proposal_home' %}">Proposal Home</a></h2>
-    <h2><form method="post" action="{% url 'proposal_staff:proposal_generate_pdf' proposal.id %}" style="display:inline;">
+    <h2><form method="post" action="{% url 'proposal_staff:proposal_generate_pdf' proposal.id %}">
     {% csrf_token %}
     <button type="submit">Create / Recreate PDF</button>
   </form></h2>
@@ -22,24 +22,30 @@
 </div>
 {% if proposal.pdf %}
     <div class="mini_menu">
-        <form method="post" action="{% url 'proposal_staff:proposal_send' proposal.id %}">
+        <form method="post" action="{% url 'proposal_staff:proposal_send' proposal.id %}" class="mini_form">
             {% csrf_token %}
             <label>Recipient emails (comma/semicolon separated):</label>
             <input type="text" name="emails" placeholder="name@company.com, other@company.com" required>
             <button type="submit">Send to client</button>
         </form>
+        <form method="post" class="mini_form">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_viewer">
+            {{ add_viewer_form.as_p }}
+            <button type="submit">Assign Client</button>
+        </form>
     </div>
 {% endif %}
 
 <div class="detail">
-    <h3>{{proposal.title}}</h3>
+    <h3>Information</h3>
     <table class="entry">
         <tr>
             <th>Company Name</th>
             <td><a href="{% url 'company_staff:company_detail' proposal.company_id %}">{{proposal.company}}</a></td>
         </tr>
         <tr>
-            <th>Contact</th>
+            <th>Main Contact Name</th>
             {% if proposal.contact_name %}
                 <td>{{proposal.contact_name}} {{company.primary_contact_name}}</td>
             {% else %}
@@ -47,17 +53,38 @@
             {% endif %}
         </tr>
         <tr>
-            <th>Email</th>
+            <th>Main Contact Email</th>
             {% if proposal.contact_email %}
                 <td>{{proposal.contact_email}}</td>
             {% else %}
                 <td>TBD</td>
             {% endif %}
         </tr>
+        <tr>
+            <th>Assigned Clients</th>
+            <td>
+                <ul>
+                    {% for c in assigned_clients %}
+                    <li>
+                        {{ c.name }}
+                        {% if c.email %}<small>&lt;{{ c.email }}&gt;</small>{% endif %}
+                        <form method="post" onsubmit="return confirm('Remove {{ c.name }} from this proposal?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="remove_viewer">
+                            <input type="hidden" name="pv_id" value="{{ c.pv_id }}">
+                            <button type="submit">Remove</button>
+                        </form>
+                    </li>
+                    {% empty %}
+                    <li>No clients assigned yet.</li>
+                    {% endfor %}
+                </ul>
+            </td>
+        </tr>
     </table>
 </div>
 <div class="detail">
-    <h3>Totals</h3>
+    <h3>{{proposal.title}} Proposal Totals</h3>
     <table class="entry">
         <tr>
             <th>Discount</th>
@@ -75,7 +102,7 @@
 </div>
 {% if items %}
     <div class="detail">
-        <h3>proposal Items</h3>
+        <h3>Proposal Items</h3>
         <table class="entry alt_entry">
             <tr>
                 <th>Name</th>

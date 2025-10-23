@@ -7,7 +7,7 @@ from django.conf import settings
 from importlib import import_module
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db import transaction
-from ..models import ProposalDraft, DraftItem, DraftNote, Proposal, ProposalLineItem, ProposalAppliedDiscount, ProposalRecipient, ProposalEvent, CatalogItem, ProposalNote, ProposalSummary
+from ..models import ProposalDraft, DraftItem, DraftNote, Proposal, ProposalLineItem, ProposalAppliedDiscount, ProposalRecipient, ProposalEvent, CatalogItem, ProposalNote, ProposalSummary, ProposalViewer
 from userApp.models import User
 from companyApp.models import Company
 from core.utils.context import base_ctx
@@ -17,8 +17,9 @@ from proposalApp.services.pdf_service import generate_proposal_pdf
 from django.http import FileResponse, HttpResponseNotAllowed
 from decimal import Decimal, InvalidOperation
 from django.forms import formset_factory
-from ..forms import NewDraftForm, DraftForm, DraftNoteForm, DraftNoteInlineFormSet, DraftItemInlineFormSet
+from ..forms import NewDraftForm, DraftForm, DraftNoteForm, DraftNoteInlineFormSet, DraftItemInlineFormSet, AddViewerForm
 from django.utils.safestring import mark_safe
+from django.contrib.auth import get_user_model
 
 def _is_owner(user):
     return user.is_active and (user.is_superuser or user.role == User.Roles.OWNER)
@@ -470,15 +471,52 @@ def view_proposal_detail(request, pk: int):
                 "summary",
                 queryset=ProposalSummary.objects.all()
             ),
+            Prefetch(
+                "allowed_viewers",
+                queryset=ProposalViewer.objects.select_related("user")
+            ),
         )
         .get(pk=pk)
     )
     if request.method == "POST":
         action = request.POST.get("action")
+
         if action == "generate_sign_link":
             proposal.ensure_signing_link()
             messages.success(request, "Signing link generated.")
             return redirect(request.path)
+        
+        if action == "add_viewer":
+            form = AddViewerForm(request.POST)
+            if form.is_valid():
+                client_user = form.cleaned_data["client"]
+                ProposalViewer.objects.get_or_create(proposal=proposal, user=client_user)
+                full_name = (client_user.get_full_name() or "").strip() or client_user.email or client_user.username
+                messages.success(request, f"Added {full_name} as a viewer.")
+                return redirect(request.path)
+        elif action == "remove_viewer":
+            pv_id = request.POST.get("pv_id")
+            pv = get_object_or_404(ProposalViewer, pk=pv_id, proposal=proposal)
+            u = pv.user
+            display = (getattr(u, "get_full_name", lambda: "")() or u.email or u.username)
+            pv.delete()
+            messages.success(request, f"Removed {display} from viewers.")
+            return redirect(request.path)
+        else:
+            form = AddViewerForm()
+    else:
+        form = AddViewerForm()
+
+    assigned_clients = []
+    for pv in proposal.allowed_viewers.select_related("user").all():
+        u = pv.user
+        name = (getattr(u, "get_full_name", lambda: "")() or "").strip()
+        assigned_clients.append({
+            "pv_id": pv.id,
+            "name": name if name else (getattr(u, "email", None) or u.username),
+            "email": getattr(u, "email", None),
+            "id": u.id,
+        })
         
     theList = list(proposal.line_items.all())
     events = list(proposal.events.all())
@@ -490,7 +528,7 @@ def view_proposal_detail(request, pk: int):
     ]
 
     title = f"{proposal.title} Proposal"
-    ctx = {"user_obj": user, "read_only": True, "proposal": proposal, "items": theList, "summary_html": summary_html, "events": events, "notes_rendered": notes_rendered}
+    ctx = {"user_obj": user, "read_only": True, "proposal": proposal, "items": theList, "summary_html": summary_html, "events": events, "notes_rendered": notes_rendered, "assigned_clients": assigned_clients, "add_viewer_form": form,}
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title 
     return render(request, "proposal_staff/view_proposal_detail.html", ctx)

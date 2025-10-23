@@ -114,12 +114,10 @@ LOGIN_REDIRECT_URL = 'userApp:post_login'
 LOGOUT_REDIRECT_URL = '/'
 PROSPECTS_CLIENT_MODEL = "companyApp.Company"
 
-# Base URL of your future signing page (view will look up Proposal by token)
-# PROPOSAL_SIGNING_URL_BASE = "https://portal.bedev-services.com/p"
+# -------- Proposal Parts --------
+# PROPOSAL_SIGNING_URL_BASE = "https://portal.beedev-services.com/p"
 PROPOSAL_SIGNING_URL_BASE = "http://127.0.0.1:8000/p"
-PROPOSAL_MESSENGER = "proposalApp.messaging.messenger:send_proposal"
-
-# Base URL for final signed proposal email
+# PROPOSAL_PUBLIC_BASE_URL = os.environ.get("PROPOSAL_PUBLIC_BASE_URL", "https://portal.beedev-services.com")
 PROPOSAL_PUBLIC_BASE_URL = env("PROPOSAL_PUBLIC_BASE_URL", default="http://127.0.0.1:8000")
 PROPOSAL_ACCOUNT_SIGNUP_URL = os.getenv("PROPOSAL_ACCOUNT_SIGNUP_URL", "/invite/register/")
 
@@ -128,7 +126,7 @@ PROPOSAL_ACCOUNT_CREATOR = "proposalApp.services.hooks:create_account_for_signed
 PROPOSAL_INVOICE_CREATOR = "proposalApp.services.hooks:create_invoice_for_deposit"
 PROPOSAL_MESSENGER       = "proposalApp.services.hooks:send_proposal_email"
 
-# Branding for PDFs (and other templates)
+# -------- Branding for PDFs --------
 BRAND_NAME = "BeeDev Services"
 BRAND_LOGO_STATIC = "images/altLogo.png"
 BRAND_TAGLINE = "Your Vision, Hive Crafted"

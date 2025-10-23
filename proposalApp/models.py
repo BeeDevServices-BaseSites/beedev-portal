@@ -13,6 +13,7 @@ from django.db import transaction
 from django.db.models import Sum, F, ExpressionWrapper, DecimalField
 from invoiceApp.models import Invoice
 from hashlib import sha256
+from companyApp.models import Company
 
 
 # ---------- Helpers ----------
@@ -647,9 +648,6 @@ class Proposal(models.Model):
 
     allowed_users = models.ManyToManyField(settings.AUTH_USER_MODEL, through="ProposalViewer", related_name="proposals_shared_with", blank=True,)
 
-    def __str__(self):
-        return f"Proposal {self.code} — {self.company.name}"
-
     title       = models.CharField(max_length=200)
     currency    = models.CharField(max_length=8, default="USD")
 
@@ -781,6 +779,14 @@ class Proposal(models.Model):
         if not self.signed_at:
             self.signed_at = timezone.now()
             self.save(update_fields=["signed_at", "updated_at"])
+        
+        if self.company_id:
+            try:
+                self.company.status = Company.Status.ACTIVE
+                self.company.pipeline_status = Company.Pipeline.IN_PROGRESS
+                self.company.save(update_fields=["status","pipeline_status"])
+            except Exception:
+                pass
 
         self.create_deposit_invoice(actor=actor, due_date=due_date, customer_user=customer_user)
 
@@ -819,17 +825,6 @@ class Proposal(models.Model):
             "at":   self.countersigned_at,
         }
 
-    def create_deposit_invoice(self, *, actor=None, due_date=None, customer_user=None):
-        from invoiceApp.models import Invoice
-
-        inv = Invoice.from_proposal(
-            self,
-            created_by=actor,
-            due_date=due_date,
-            customer_user=customer_user,
-        )
-        return inv
-    
     def _stamp_company_signature_on_pdf(self) -> bool:
         if not getattr(self, "pdf", None) or not self.pdf or not self.countersigned_by_id:
             return False
@@ -1155,7 +1150,7 @@ class ProposalAccountInvite(models.Model):
             from django.urls import reverse
             return reverse("proposal_public:proposal_account_invite", args=[self.token])
         except Exception:
-            base_path = getattr(settings, "PROPOSAL_ACCOUNT_INVITE_PATH", "/account/invite/")
+            base_path = getattr(settings, "PROPOSAL_ACCOUNT_SIGNUP_URL", "/account/invite/")
             if not base_path.endswith("/"):
                 base_path += "/"
             return f"{base_path}{self.token}/"

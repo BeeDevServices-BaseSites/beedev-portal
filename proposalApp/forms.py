@@ -3,6 +3,9 @@ from django import forms
 from django.forms import formset_factory, inlineformset_factory, BaseInlineFormSet
 from companyApp.models import Company
 from .models import ProposalDraft, Discount, DraftNote, DraftItem
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 class BaseDraftNoteFS(BaseInlineFormSet):
     def clean(self):
@@ -102,6 +105,26 @@ class DraftForm(forms.ModelForm):
 
 NewDraftForm = DraftForm
 
+def client_queryset():
+    role_val = None
+    try:
+        role_val = getattr(User.Roles, "CLIENT", None) or getattr(User.Roles, "CLIENT".upper(), None)
+    except Exception:
+        pass
+    filters = {"is_staff": False}
+    if role_val:
+        filters["role"] = role_val
+    else:
+        # Fallback if your custom user doesn't expose Roles enum
+        filters["role"] = "CLIENT"
+    return User.objects.filter(**filters).order_by("first_name", "last_name", "email")
+
+class AddViewerForm(forms.Form):
+    client = forms.ModelChoiceField(
+        queryset=client_queryset(),
+        label="Client",
+        help_text="Give this client access to view this proposal."
+    )
 
 # --------------------------------
 # Notes (create flow: plain FormSet)
