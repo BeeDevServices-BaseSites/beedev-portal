@@ -24,6 +24,7 @@ urlpatterns = [
     path("team/<int:pk>/", view_staff_profile, name="profile_detail"),
     path("team/<int:pk>/edit", edit_staff_profile, name="edit_staff_profile"),
     path("clients/", view_all_clients, name="view_all_clients"),
+    path("clients/<int:pk>/", view_client_profile, name="view_client_profile"),
 
     # || Client Links ||
     path("client/", client_home, name="client_home"),

@@ -91,7 +91,7 @@
         <td>
           <ul>
             {% for p in proposals %}
-            <li><a href="#">{{p.title}} - ${{p.amount_total}}</a></li>
+            <li><a href="{% url 'proposal_staff:proposal_detail' p.pk %}">{{p.title}} - ${{p.amount_total}}</a></li>
             {% endfor %}
           </ul>
         </td>

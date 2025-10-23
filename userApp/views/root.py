@@ -3,8 +3,9 @@ from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from core.utils.context import CommonContextMixin, base_ctx
 from ..forms import PortalAuthForm
+from django.db.models import Prefetch, Max
 from ..models import User
-from proposalApp.models import Proposal, ProposalDraft
+from proposalApp.models import Proposal, ProposalDraft, ProposalEvent
 from projectApp.models import Project
 from companyApp.models import CompanyMembership
 import logging
@@ -48,20 +49,37 @@ def employee_home(request):
         raise redirect("userApp:client_home")
     
     drafts = ProposalDraft.objects.all()
-    proposals = Proposal.objects.all()
+    proposals_qs = (
+        Proposal.objects
+        .select_related("company")
+        .annotate(last_event_at=Max("events__at"))
+        .prefetch_related(
+            Prefetch(
+                "events",
+                queryset=ProposalEvent.objects.select_related("actor").order_by("-at", "pk")
+            )
+        )
+        .order_by("-last_event_at", "-created_at")
+    )
+    proposals = list(proposals_qs)
+    last_events_by_id = {
+        p.id: (p.events.all()[0] if p.events.all() else None)
+        for p in proposals
+    }
     users = User.objects.all()
     projects = Project.objects.all()
     
     if _allowed_upper_management(request.user):
-        drafts = drafts.filter(approval_status="SUBMITTED")
-        dash = {"drafts": drafts, "proposals": proposals, "users": users}
+        admin_drafts = drafts.filter(approval_status="SUBMITTED")
+        drafts = drafts.exclude(approval_status__in=["SUBMITTED", "CONVERTED"])
+        dash = {"drafts": drafts, "admin_drafts": admin_drafts, "proposals": proposals, "users": users, "last_events_by_id": last_events_by_id}
     elif _allowed_staff(request.user): 
         drafts = drafts.filter(created_by_id=user.id)
         proposals = proposals.filter(created_by_id=user.id)
-        dash = {"drafts": drafts, "proposals": proposals}
-
+        dash = {"drafts": drafts, "proposals": proposals, "last_events_by_id": last_events_by_id}
+    print(dash, request.user.role)
     ctx = {"user_obj": user, "read_only": True, 'dash': dash}
-    title = "Dashboard"
+    title = "BeeDev Services Work Dashboard"
     ctx.update(base_ctx(request, title=title))
     ctx['page_heading'] = title
     return render(request, "userApp/staff/employee_home.html", ctx)

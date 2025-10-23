@@ -3,6 +3,7 @@ from django.conf import settings
 from django.utils import timezone
 from decimal import Decimal
 
+
 class TimeEntry(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="time_entries"
@@ -10,9 +11,11 @@ class TimeEntry(models.Model):
     project = models.ForeignKey(
         "projectApp.Project", on_delete=models.CASCADE, related_name="time_entries"
     )
-    job_rate = models.ForeignKey(
-        "proposalApp.JobRate", on_delete=models.PROTECT, related_name="time_entries"
+    task = models.ForeignKey(
+        "projectApp.ProjectTask", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="time_entries"
     )
+    job_rate = models.ForeignKey("proposalApp.JobRate", on_delete=models.PROTECT, null=True, blank=True, related_name="time_entries")
 
     notes = models.CharField(max_length=240, blank=True)
 
@@ -105,19 +108,21 @@ class ActiveTimer(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="active_timer"
     )
     project = models.ForeignKey("projectApp.Project", on_delete=models.CASCADE)
-    job_rate = models.ForeignKey("proposalApp.JobRate", on_delete=models.PROTECT)
+    task = models.ForeignKey("projectApp.ProjectTask", null=True, blank=True, on_delete=models.SET_NULL, related_name="active_timers")
+
+    job_rate = models.ForeignKey("proposalApp.JobRate", on_delete=models.PROTECT, null=True, blank=True)
     notes = models.CharField(max_length=240, blank=True)
     started_at = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
         return f"Timer · {self.user} · {self.project} · {self.started_at:%Y-%m-%d %H:%M}"
 
-    @transaction.atomic
-    def stop_and_create_entry(self, *, billable=True) -> TimeEntry:
+    def stop_and_create_entry(self, *, billable=True):
         end = timezone.now()
         entry = TimeEntry.objects.create(
             user=self.user,
             project=self.project,
+            task=self.task,
             job_rate=self.job_rate,
             notes=self.notes,
             start_at=self.started_at,
