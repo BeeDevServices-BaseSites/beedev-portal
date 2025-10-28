@@ -9,7 +9,7 @@ from django.conf.urls.static import static
 app_name = "company_client"
 
 urlpatterns = [
-    # path('', views.view_company, name='company_home'),
+    path('company/<int:pk>/', views.view_my_company_detail, name='my_company_detail'),
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -45,8 +45,7 @@
             {% else %}
             {# ===== CLIENT SIDE ===== #}
                 <a href="{% url 'userApp:client_home' %}">Dashboard</a>
-                <a href="{% url 'userApp:view_client_profile' %}">Profile</a>
-                <a href="#">Company Profile</a>
+                <a href="{% url 'userApp:client_profile_me' %}">Profile</a>
                 <form method="post" action="{% url 'userApp:logout' %}" style="display:inline;">
                     {% csrf_token %}
                     <button type="submit" class="linklike">Logout</button>

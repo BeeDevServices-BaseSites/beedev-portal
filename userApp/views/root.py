@@ -93,12 +93,13 @@ def client_home(request):
         .select_related("company")
     )
     companies_info = []
+    company = ''
     if not memberships.exists():
         print(f"[DASH] {u.email} has no active company memberships")
-        log.info("[DASH] %s has no active company memberships", u.email)
     else:
         for m in memberships:
             c = m.company
+            company = m.company
 
             # All proposals for the company
             props_all = (
@@ -117,14 +118,6 @@ def client_home(request):
                 .order_by("-created_at")
             )
 
-            # Print to terminal (and log)
-            print(f"[DASH] {u.email} -> Company #{c.id}: {c.name}")
-            print("       All proposals:", [(p.id, p.title) for p in props_all])
-            print("       Shared with user:", [(p.id, p.title) for p in props_shared])
-            log.info("[DASH] %s -> Company #%s: %s", u.email, c.id, c.name)
-            log.info("       All proposals: %s", [(p.id, p.title) for p in props_all])
-            log.info("       Shared with user: %s", [(p.id, p.title) for p in props_shared])
-
             companies_info.append({
                 "company": c,
                 "proposals_all": list(props_all),
@@ -133,6 +126,7 @@ def client_home(request):
     ctx = {
         "user_name": u.get_full_name() or u.username,
         "companies_info": companies_info,
+        "company": company
     }
     title = "Dashboard"
     ctx.update(base_ctx(request, title=title))

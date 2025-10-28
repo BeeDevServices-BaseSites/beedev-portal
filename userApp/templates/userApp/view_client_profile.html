@@ -8,32 +8,32 @@
     </head>
   <h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
   <div class="info">
-    <h3>{{client.first_name}}'s information:</h3>
+    <h3>{{user_obj.first_name}}'s information:</h3>
       <table class="entry">
         <tr>
           <th>First Name:</th>
-          <td>{% if client.first_name %}
-            {{client.first_name}}
+          <td>{% if user_obj.first_name %}
+            {{user_obj.first_name}}
           {% else %}
             TBD
           {% endif %}</td>
         </tr>
         <tr>
           <th>Last Name:</th>
-          <td>{% if client.last_name %}
-            {{client.last_name}}
+          <td>{% if user_obj.last_name %}
+            {{user_obj.last_name}}
           {% else %}
             TBD
           {% endif %}</td>
         </tr>
         <tr>
           <th>Username:</th>
-          <td>{{client.username}}</td>
+          <td>{{user_obj.username}}</td>
         </tr>
         <tr>
           <th>Personal Email:</th>
-          <td>{% if client.email %}
-            {{client.email}}
+          <td>{% if user_obj.email %}
+            {{user_obj.email}}
           {% else %}
             TBD
           {% endif %}</td>

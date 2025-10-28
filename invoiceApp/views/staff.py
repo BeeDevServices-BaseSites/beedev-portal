@@ -23,6 +23,7 @@ def invoice_home(request):
     paid = Invoice.objects.filter(status="PAID")
 
     title = "Invoice Admin"
+    print('Invoices', invoices)
     ctx = {"user_obj": user, "read_only": True, "invoices": invoices, "unpaid": unpaid, "paid": paid}
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title

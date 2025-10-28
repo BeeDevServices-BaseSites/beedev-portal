@@ -3,6 +3,8 @@ from decimal import Decimal
 from django.contrib import admin
 from django.utils.html import format_html
 from .models import Invoice, InvoiceLineItem, InvoiceAppliedDiscount, Payment
+from django.utils import timezone
+from django.conf import settings
 
 # ---- permission helpers ----
 def is_owner(u):
@@ -24,13 +26,11 @@ class InvoiceLineItemInline(admin.TabularInline):
     fields = ("sort_order", "name", "description", "quantity", "unit_price", "subtotal")
     readonly_fields = ()
 
-
 class InvoiceAppliedDiscountInline(admin.TabularInline):
     model = InvoiceAppliedDiscount
     extra = 0
     fields = ("discount_code", "name", "kind", "value", "amount_applied", "sort_order")
     readonly_fields = ()
-
 
 class PaymentInline(admin.TabularInline):
     model = Payment
@@ -51,14 +51,13 @@ class PaymentInline(admin.TabularInline):
     def has_delete_permission(self, request, obj=None):
         return is_owner(request.user) or is_admin(request.user)
 
-
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
     list_display = (
         "number", "company", "customer_user", "status",
         "total", "amount_paid", "balance_display",
         "due_date",
-        "stripe_status", "stripe_invoice_short", "stripe_pi_short",
+        "stripe_status", "stripe_invoice_short", "stripe_pi_short", "public_link",
         "updated_at",
     )
     list_filter  = ("status", "currency")
@@ -83,7 +82,12 @@ class InvoiceAdmin(admin.ModelAdmin):
     )
     readonly_fields = ("created_at", "updated_at", "stripe_invoice_link")
 
-    actions = ["recalc_totals_action", "refresh_status_action", "clear_stripe_refs_action"]
+    actions = ["recalc_totals_action", "refresh_status_action", "clear_stripe_refs_action", "mark_sent_action", "void_invoices_action", "mark_paid_manual_full_action",]
+
+    def public_link(self, obj):
+        base = getattr(settings, "PROPOSAL_PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+        return format_html('<a href="{}/i/{}/" target="_blank">Open</a>', base, obj.view_token)
+    public_link.short_description = "Public URL"
 
     def balance_display(self, obj):
         value = obj.balance_due or Decimal("0.00")
@@ -150,6 +154,54 @@ class InvoiceAdmin(admin.ModelAdmin):
                 inv.save(update_fields=fields + ["updated_at"])
                 updated += 1
         self.message_user(request, f"Cleared Stripe refs on {updated} invoice(s).")
+    
+    @admin.action(description="Mark as SENT (set issue_date if empty)")
+    def mark_sent_action(self, request, queryset):
+        updated = 0
+        today = timezone.now().date()
+        for inv in queryset:
+            if not inv.issue_date:
+                inv.issue_date = today
+            if inv.status == Invoice.Status.DRAFT:
+                inv.status = Invoice.Status.SENT
+            inv.save(update_fields=["issue_date", "status", "updated_at"])
+            updated += 1
+        self.message_user(request, f"Updated {updated} invoice(s) to SENT.")
+
+    @admin.action(description="Void selected invoices")
+    def void_invoices_action(self, request, queryset):
+        n = queryset.update(status=Invoice.Status.VOID, updated_at=timezone.now())
+        self.message_user(request, f"Voided {n} invoice(s).")
+
+    @admin.action(description="Recalculate totals from line items/discounts")  # you already have this name—either keep yours or this one
+    def recalc_totals_action(self, request, queryset):
+        for inv in queryset:
+            inv.recalc_totals(save=True)
+            inv.refresh_status_from_payments(save=True)
+        self.message_user(request, f"Recalculated totals and refreshed statuses for {queryset.count()} invoice(s).")
+
+    @admin.action(description="Mark as PAID (manual) for full remaining balance")
+    def mark_paid_manual_full_action(self, request, queryset):
+        created = 0
+        for inv in queryset:
+            if inv.status == Invoice.Status.VOID:
+                continue
+            due = inv.balance_due or Decimal("0.00")
+            if due > Decimal("0.00"):
+                Payment.objects.create(
+                    invoice=inv,
+                    amount=due,
+                    method=Payment.Method.OTHER,
+                    reference="Manual full payment (admin)",
+                    payer_user=inv.customer_user,
+                    created_by=request.user,
+                    received_at=timezone.now(),
+                    notes="Backfilled via admin action",
+                    gateway_status="succeeded",
+                )
+                created += 1
+        self.message_user(request, f"Recorded {created} manual payment(s).")
+
 
 
 @admin.register(Payment)
