@@ -21,6 +21,9 @@ from ..forms import NewDraftForm, DraftForm, DraftNoteForm, DraftNoteInlineFormS
 from django.utils.safestring import mark_safe
 from django.contrib.auth import get_user_model
 
+import logging
+log = logging.getLogger(__name__)
+
 def _is_owner(user):
     return user.is_active and (user.is_superuser or user.role == User.Roles.OWNER)
 
@@ -47,14 +50,13 @@ def _dec_or(default, raw):
         return Decimal(str(default))
 
 try:
-    import markdown  # pip install markdown
+    import markdown
     def render_md(text: str):
         return mark_safe(markdown.markdown(
             text or "",
             extensions=["extra", "sane_lists", "tables", "fenced_code"]
         ))
 except Exception:
-    # Fallback if markdown isn't installed yet
     from django.utils.html import escape
     from django.template.defaultfilters import linebreaksbr
     def render_md(text: str):
@@ -219,7 +221,6 @@ def view_draft_detail(request, pk: int):
     if request.method == "POST":
         action = request.POST.get("action")
 
-        # 1) Submit for approval
         if action == "submit":
             reviewer_id = request.POST.get("reviewer_id")
             if reviewer_id and hasattr(draft, "assigned_reviewer_id"):
@@ -240,7 +241,6 @@ def view_draft_detail(request, pk: int):
             messages.success(request, "Draft submitted for approval.")
             return redirect(request.path)
 
-        # 2) Approve / Reject (Admin/Owner only)
         if action in {"approve", "reject"}:
             if not (user.role in (User.Roles.ADMIN, User.Roles.OWNER) or user.is_superuser):
                 raise PermissionDenied("Only Admin/Owner may approve or reject drafts.")
@@ -253,7 +253,6 @@ def view_draft_detail(request, pk: int):
                 messages.info(request, "Draft rejected.")
             return redirect(request.path)
 
-        # 3) Convert to Proposal (only after Approved)
         if action == "convert":
             if draft.approval_status != ProposalDraft.ApprovalStatus.APPROVED:
                 messages.error(request, "Draft must be approved before conversion.")
@@ -261,23 +260,19 @@ def view_draft_detail(request, pk: int):
             with transaction.atomic():
                 proposal = draft.convert_to_proposal(actor=user)
                 base_url = request.build_absolute_uri("/")
-                # This controls replacing the pdf... (this will keep one version per proposal)
                 generate_proposal_pdf(
                     proposal,
                     request=request,
                     base_url=base_url,
-                    overwrite=True,   # single canonical file per proposal
-                    delete_old=True,  # remove old PDF before saving new one
+                    overwrite=True,
+                    delete_old=True,
                 )
-                # This controls versioning the pdf... (this will keep multiple versions per proposal)
-                # generate_proposal_pdf(proposal, base_url=base_url, overwrite=False)
             messages.success(request, "Converted to proposal and generated PDF.")
             return redirect(reverse("proposal_staff:proposal_detail", args=[proposal.id]))
 
         messages.error(request, "Unknown action.")
         return redirect(request.path)
 
-    
     theList = list(draft.items.all())
 
     summary_html = render_md(draft.summary_md or "")
@@ -389,12 +384,12 @@ def edit_proposal_draft(request, pk: int):
             messages.success(request, "Draft updated.")
             return redirect(reverse("proposal_staff:draft_detail", args=[draft.pk]))
         else:
-            print("FORM errors:", form.errors)
-            print("NOTES non_form_errors:", notes_fs.non_form_errors())
-            print("NOTES mgmt errors:", notes_fs.management_form.errors)
+            log.info("FORM errors:", form.errors)
+            log.info("NOTES non_form_errors:", notes_fs.non_form_errors())
+            log.info("NOTES mgmt errors:", notes_fs.management_form.errors)
             for i, f in enumerate(notes_fs.forms):
                 if f.errors:
-                    print(f"NOTES form[{i}] errors:", f.errors)
+                    log.info("NOTES form errors:", f.errors)
             messages.error(request, "Please fix the errors below.")
 
     else:

@@ -12,13 +12,11 @@ def view_client_profile(request, pk: int | None = None):
     U = get_user_model()
 
     if pk is None:
-        # Client self-profile route
         if getattr(user, 'role', None) != user.Roles.CLIENT:
             raise PermissionDenied("This page is for clients only")
         target_user = user
         read_only = False
     else:
-        # Staff viewing a specific client’s profile
         allowed_roles = {user.Roles.EMPLOYEE, user.Roles.ADMIN, user.Roles.OWNER, user.Roles.HR}
         if getattr(user, 'role', None) not in allowed_roles:
             raise PermissionDenied("Not allowed")
@@ -50,7 +48,6 @@ def view_employee_profile(request):
     if getattr(user, "role", None) not in allowed_roles:
         raise PermissionDenied("Not allowed")
 
-    # Only create profile for actual EMPLOYEEs
     if user.role == user.Roles.EMPLOYEE:
         profile, _ = EmployeeProfile.objects.get_or_create(user=user)
     else:

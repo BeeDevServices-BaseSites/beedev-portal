@@ -77,7 +77,6 @@ def employee_home(request):
         drafts = drafts.filter(created_by_id=user.id)
         proposals = proposals.filter(created_by_id=user.id)
         dash = {"drafts": drafts, "proposals": proposals, "last_events_by_id": last_events_by_id}
-    print(dash, request.user.role)
     ctx = {"user_obj": user, "read_only": True, 'dash': dash}
     title = "BeeDev Services Work Dashboard"
     ctx.update(base_ctx(request, title=title))
@@ -95,13 +94,12 @@ def client_home(request):
     companies_info = []
     company = ''
     if not memberships.exists():
-        print(f"[DASH] {u.email} has no active company memberships")
+        log.info("[DASH] no active company memberships", u.email)
     else:
         for m in memberships:
             c = m.company
             company = m.company
 
-            # All proposals for the company
             props_all = (
                 Proposal.objects
                 .filter(company=c)
@@ -109,7 +107,6 @@ def client_home(request):
                 .order_by("-created_at")
             )
 
-            # Proposals explicitly shared with this user (via ProposalViewer)
             props_shared = (
                 Proposal.objects
                 .filter(company=c, allowed_viewers__user=u)

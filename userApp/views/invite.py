@@ -54,19 +54,15 @@ class InviteRegisterForm(forms.Form):
         if p1 and p2 and p1 != p2:
             self.add_error("password2", "Passwords do not match.")
 
-        # Username handling (only if the user model actually has a username field)
         if _user_model_has_username():
             email = (data.get("email") or "").strip().lower()
             raw_username = (data.get("username") or "").strip()
 
-            # Auto-generate from email if not provided
             if not raw_username and email:
                 raw_username = _suggest_username_from_email(email)
 
-            # Sanitize + ensure uniqueness
             if raw_username:
                 sanitized = _sanitize_username(raw_username)
-                # If the sanitized differs or is taken, pick a unique suggestion
                 if (
                     sanitized.lower() != raw_username.lower()
                     or User.objects.filter(username__iexact=sanitized).exists()
@@ -74,7 +70,6 @@ class InviteRegisterForm(forms.Form):
                     sanitized = _unique_username(sanitized)
                 data["username"] = sanitized
             else:
-                # Last-ditch fallback
                 data["username"] = _unique_username("user")
 
         return data
@@ -89,7 +84,6 @@ def _split_name(full_name: str) -> tuple[str, str]:
     return parts[0], " ".join(parts[1:])
 
 def _redirect_to_proposal(proposal: Proposal):
-    # Prefer your existing public view of a proposal; fall back to PDF; else home.
     try:
         return redirect(reverse("proposal_public:proposal_public_view", args=[proposal.sign_token]))
     except Exception:
@@ -108,9 +102,6 @@ def _user_model_has_username() -> bool:
         return False
 
 def _sanitize_username(base: str) -> str:
-    """
-    Keep letters, numbers, ., _, - ; trim and lower.
-    """
     base = (base or "").strip().lower()
     base = re.sub(r"[^a-z0-9._-]+", "", base)
     return base or "user"
@@ -120,10 +111,6 @@ def _suggest_username_from_email(email: str) -> str:
     return _sanitize_username(local or "user")
 
 def _unique_username(seed: str) -> str:
-    """
-    Ensure the username is unique by appending a numeric suffix if needed.
-    Only used if the User model actually has a 'username' field.
-    """
     candidate = _sanitize_username(seed)
     if not User.objects.filter(username__iexact=candidate).exists():
         return candidate
@@ -139,7 +126,6 @@ def redeem_invite_and_register(request, token: str):
     inv = get_object_or_404(ProposalAccountInvite, token=token)
     proposal = inv.proposal
 
-    # Basic validity guard
     if inv.is_used or inv.is_expired:
         ctx = {"proposal": proposal, "invite": inv, "invalid": True}
         return render(request, "proposals/invite_invalid.html", ctx, status=410)
@@ -153,7 +139,6 @@ def redeem_invite_and_register(request, token: str):
             full_name = form.cleaned_data["full_name"].strip()
             pw = form.cleaned_data["password1"]
 
-            # If a user already exists, nudge to login (optional: store token to bind post-login)
             existing = User.objects.filter(email__iexact=email).first()
             if existing:
                 messages.error(request, "An account with this email already exists. Please log in to continue.")
@@ -163,7 +148,6 @@ def redeem_invite_and_register(request, token: str):
                 except NoReverseMatch:
                     return _redirect_to_proposal(proposal)
 
-            # Create user
             first_name, last_name = _split_name(full_name)
             create_kwargs = dict(
                 email=email,
@@ -172,7 +156,6 @@ def redeem_invite_and_register(request, token: str):
                 is_active=True,
             )
             if _user_model_has_username():
-                # Use cleaned/unique username from form
                 username = form.cleaned_data.get("username") or _suggest_username_from_email(email)
                 username = _unique_username(username)
                 create_kwargs["username"] = username
@@ -181,7 +164,6 @@ def redeem_invite_and_register(request, token: str):
             user.set_password(pw)
             user.save(update_fields=["password"])
 
-            # Link to company
             CompanyMembership.objects.get_or_create(
                 company=inv.company,
                 user=user,
@@ -194,7 +176,7 @@ def redeem_invite_and_register(request, token: str):
             if hasattr(company, "status"):
                 S = getattr(company, "Status", None)
                 new_status = getattr(S, "ACTIVE", None) if S else None
-                new_status = new_status or "ACTIVE"  # fallback to string if no enum
+                new_status = new_status or "ACTIVE"
                 if getattr(company, "status", None) != new_status:
                     company.status = new_status
                     updated_fields.append("status")
@@ -202,7 +184,7 @@ def redeem_invite_and_register(request, token: str):
             if hasattr(company, "pipeline_status"):
                 PS = getattr(company, "PipelineStatus", None)
                 new_pipe = getattr(PS, "NEW", None) if PS else None
-                new_pipe = new_pipe or "new"  # fallback to string if no enum
+                new_pipe = new_pipe or "new"
                 if getattr(company, "pipeline_status", None) != new_pipe:
                     company.pipeline_status = new_pipe
                     updated_fields.append("pipeline_status")
@@ -210,7 +192,6 @@ def redeem_invite_and_register(request, token: str):
             if updated_fields:
                 company.save(update_fields=updated_fields)
 
-            # Mark invite used & record event
             inv.mark_used(user=user, save=True)
             ProposalEvent.objects.create(
                 proposal=proposal,
@@ -219,7 +200,6 @@ def redeem_invite_and_register(request, token: str):
                 data={"invite": {"token": inv.token, "used_by": user.email}}
             )
 
-            # Log in and bounce back to proposal
             auth_login(request, user)
             messages.success(request, "Your account has been created and linked to this proposal.")
             try:

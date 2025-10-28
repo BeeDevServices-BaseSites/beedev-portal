@@ -6,6 +6,9 @@ from companyApp.models import CompanyMembership
 from core.utils.context import base_ctx
 from userApp.models import User
 
+import logging
+log = logging.getLogger(__name__)
+
 def _allowed_users(u: User) -> bool:
     return u.is_active and u.role in {User.Roles.CLIENT}
 
@@ -22,7 +25,7 @@ def view_all_client_proposals(request):
     )
     proposals = []
     if not memberships.exists():
-        print(f"{user.email} has no active company memberships")
+        log.info("[DASH] no active company memberships", user.email)
     else:
         for m in memberships:
             c = m.company
@@ -55,7 +58,6 @@ def view_all_client_proposals(request):
                 "signed": list(props_signed),
                 "due": list(props_awaiting_signature)
             })
-    print("proposals", proposals)
     title = "Proposals"
     ctx = {"user_obj": user, "read_only": True, "proposals": proposals}
     ctx.update(base_ctx(request, title=title))

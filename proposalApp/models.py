@@ -35,7 +35,7 @@ def proposal_pdf_upload_to(instance, filename):
     ext = os.path.splitext(filename)[1].lower()
     ext = ".pdf" if ext != ".pdf" else ext
     company_slug = getattr(getattr(instance, "company", None), "slug", None) or "proposal"
-    return f"proposals/{today.year}/{today.month:02d}/{company_slug}-{uuid.uuid4().hex}{ext}"
+    return f"proposals/{company_slug}/{today.year}/{today.month:02d}/{company_slug}-{uuid.uuid4().hex}{ext}"
 
 def proof_upload_to(instance, filename):
     # Store in media/discount_proofs/YYYY/MM/<proposalId>/<filename>
@@ -767,6 +767,15 @@ class Proposal(models.Model):
     def create_deposit_invoice(self, *, actor=None, due_date=None, customer_user=None):
         if q2(self.amount_total) <= Decimal("0.00") or q2(self.deposit_amount) <= Decimal("0.00"):
             return None
+
+        ensure_fn = getattr(Invoice, "ensure_deposit_from_proposal", None)
+        if callable(ensure_fn):
+            return Invoice.ensure_deposit_from_proposal(
+                self,
+                created_by=actor,
+                due_date=due_date,
+                customer_user=customer_user,
+            )
 
         return Invoice.from_proposal(
             self,

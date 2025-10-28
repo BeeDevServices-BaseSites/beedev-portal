@@ -23,8 +23,20 @@ def invoice_home(request):
     paid = Invoice.objects.filter(status="PAID")
 
     title = "Invoice Admin"
-    print('Invoices', invoices)
     ctx = {"user_obj": user, "read_only": True, "invoices": invoices, "unpaid": unpaid, "paid": paid}
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title
     return render(request, "invoice_staff/invoice_home.html", ctx)
+
+@login_required
+def create_new_invoice(request):
+    user = request.user
+    if not _allowed_management(request.user):
+        raise PermissionDenied("Not allowed")
+    
+
+    title = "Create Invoice"
+    ctx = {"user_obj": user, "read_only": True}
+    ctx.update(base_ctx(request, title=title))
+    ctx["page_heading"] = title
+    return render(request, "invoice_staff/create_new_invoice.html", ctx)
