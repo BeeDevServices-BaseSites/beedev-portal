@@ -10,7 +10,7 @@
 
 <form method="post">
   {% csrf_token %}
-  <div class="grid" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+  <div class="grid">
     <div>
       <label>Company</label>
       {{ form.company }}
@@ -20,17 +20,17 @@
       {{ form.proposal }}
     </div>
 
-    <div style="grid-column:1 / span 2;">
+    <div>
       <label>Name</label>
       {{ form.name }}
     </div>
 
-    <div style="grid-column:1 / span 2;">
+    <div>
       <label>Description</label>
       {{ form.description }}
     </div>
 
-    <div style="grid-column:1 / span 2;">
+    <div>
       <label>Scope Summary</label>
       {{ form.scope_summary }}
     </div>
@@ -84,7 +84,7 @@
 
   <div style="margin-top:1rem;">
     <button class="button is-primary" type="submit">Create Project</button>
-    <a class="button" href="{% url 'projects_staff:home' %}">Cancel</a>
+    <a class="button" href="{% url 'projects_staff:project_home' %}">Cancel</a>
   </div>
 </form>
 {% endblock %}

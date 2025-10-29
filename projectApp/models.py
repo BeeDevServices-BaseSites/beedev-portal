@@ -228,6 +228,14 @@ class ProjectTask(models.Model):
     @property
     def is_done(self) -> bool:
         return self.status == self.Status.DONE
+    
+    @property
+    def checklist_total(self) -> int:
+        return self.checklist.count()
+
+    @property
+    def checklist_done(self) -> int:
+        return self.checklist.filter(done=True).count()
 
 class ProjectMilestone(models.Model):
     class State(models.TextChoices):

@@ -24,10 +24,10 @@
     <select name="company">
       <option value="">All Companies</option>
       {% for c in companies %}
-        <option value="{{ c.company_id }}" {% if company|stringformat:'s' == c.company_id|stringformat:'s' %}selected{% endif %}>
-          {{ c.company__name }}
-        </option>
-      {% endfor %}
+            <option value="{{ c.id }}" {% if company_filter|stringformat:'s' == c.id|stringformat:'s' %}selected{% endif %}>
+            {{ c.name }}
+            </option>
+        {% endfor %}
     </select>
     <select name="active">
       <option value="">Active/Inactive</option>
@@ -36,11 +36,9 @@
     </select>
     <button class="button" type="submit">Filter</button>
   </form>
-
-
 </div>
 
-<table class="table is-fullwidth">
+<table>
   <thead>
     <tr>
       <th>Company</th>

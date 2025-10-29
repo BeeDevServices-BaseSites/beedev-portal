@@ -50,6 +50,30 @@ body main .mini_menu a:hover {
   color: var(--green);
   text-decoration: underline;
 }
+body main table {
+  width: 50%;
+  margin: 1em;
+}
+body main table tr th {
+  text-align: center;
+  background-color: var(--green);
+  color: var(--white);
+  padding: 1em;
+  font-size: 1.2em;
+}
+body main table tr a {
+  color: var(--black);
+  text-decoration: none;
+}
+body main table tr a:hover {
+  color: var(--green);
+  text-decoration: underline;
+}
+body main table .grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
 .kanban {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -84,4 +108,21 @@ body main .mini_menu a:hover {
   padding: 0.1rem 0.4rem;
   border: 1px solid #ddd;
   border-radius: 6px;
+}
+.kanban-card.dragging {
+  opacity: 0.5;
+}
+.kanban-list {
+  min-height: 2rem;
+}
+.kanban-card.dragging {
+  opacity: 0.5;
+}
+.kanban-empty {
+  color: #777;
+  font-style: italic;
+  padding: 0.4rem 0.6rem;
+}
+.kanban-list {
+  min-height: 2rem;
 }

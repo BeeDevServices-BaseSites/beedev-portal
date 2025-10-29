@@ -4,17 +4,22 @@ from django.core.exceptions import PermissionDenied
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
 from django.views.decorators.http import require_POST
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Max, Q
 from django.core.paginator import Paginator
-from django.db.models import Q
 from core.utils.context import base_ctx
-
+from django.views.decorators.http import require_http_methods, require_POST
+from django.forms import modelform_factory
+from django.db import transaction
+from django.views.decorators.csrf import ensure_csrf_cookie
+import json
+from django.http import JsonResponse
+from companyApp.models import Company
 from ..models import (
-    Project, ProjectTask, Sprint, TaskComment, TaskChecklistItem, TaskAttachment
+    Project, ProjectTask, Sprint, TaskComment, TaskChecklistItem, TaskAttachment, ProjectMember
 )
 from ..forms import (
     TaskCommentForm, TaskChecklistItemForm, TaskAttachmentForm,
-    TaskMoveForm, TaskAssignSprintForm, ProjectCreateForm
+    TaskMoveForm, TaskAssignSprintForm, ProjectCreateForm, ProjectMemberAddForm, QuickTaskForm, SprintForm, MoveManyForm
 )
 
 # ---------------- Permissions ----------------
@@ -61,7 +66,7 @@ def project_home(request):
 
     q = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
-    company = request.GET.get("company", "").strip()
+    company_filter = request.GET.get("company", "").strip()
     active = request.GET.get("active", "").strip()  # "", "1", "0"
 
     projects = Project.objects.select_related("company", "proposal", "manager").order_by("company__name", "name")
@@ -77,8 +82,8 @@ def project_home(request):
         )
     if status:
         projects = projects.filter(status=status)
-    if company:
-        projects = projects.filter(company_id=company)
+    if company_filter:
+        projects = projects.filter(company_id=company_filter)
     if active in {"1", "0"}:
         projects = projects.filter(is_active=(active == "1"))
 
@@ -87,10 +92,10 @@ def project_home(request):
     page_obj = paginator.get_page(page)
 
     statuses = Project.Status.choices
-    companies = Project.objects.values("company_id", "company__name").distinct().order_by("company__name")
+    companies = Company.objects.order_by("name").only("id", "name")
 
     title = "Projects"
-    ctx = dict(page_obj=page_obj, q=q, status=status, statuses=statuses, companies=companies, active=active)
+    ctx = dict(page_obj=page_obj, q=q, status=status, statuses=statuses, companies=companies, company_filter=company_filter, active=active)
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title
     return render(request, "projectApp_staff/project_home.html", ctx)
@@ -107,7 +112,7 @@ def project_create(request):
             proj.created_by = request.user
             proj.save()
             messages.success(request, "Project created.")
-            return redirect("projectApp:board", slug=proj.slug)
+            return redirect("projects_staff:project_board", slug=proj.slug)
         messages.error(request, "Please fix the errors below.")
     else:
         form = ProjectCreateForm()
@@ -116,9 +121,10 @@ def project_create(request):
     ctx = dict(form=form)
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title
-    return render(request, "projectApp/project_create.html", ctx)
+    return render(request, "projectApp_staff/project_create.html", ctx)
 
 # ---------------- Board & My Tasks ----------------
+@ensure_csrf_cookie
 @login_required
 def project_board(request, slug: str):
     project = get_object_or_404(Project, slug=slug)
@@ -162,6 +168,8 @@ def my_tasks(request):
     return render(request, "projectApp_staff/my_tasks.html", ctx)
 
 # ---------------- Task Detail & Interactions ----------------
+def _current_board_scope(project: Project):
+    return project.sprints.filter(is_active=True).order_by("start_date").first()
 
 @login_required
 def task_detail(request, pk: int):
@@ -286,3 +294,173 @@ def task_assign_sprint(request, pk: int):
     else:
         messages.error(request, "Could not update sprint.")
     return redirect("projectApp:task_detail", pk=task.pk)
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def project_manage_members(request, slug: str):
+    project = get_object_or_404(Project, slug=slug)
+    _assert_edit_perm(request.user, project)
+
+    if request.method == "POST":
+        form = ProjectMemberAddForm(request.POST, project=project)
+        if form.is_valid():
+            pm = form.save(commit=False)
+            pm.project = project
+            pm_existing = ProjectMember.objects.filter(project=project, user=pm.user).first()
+            if pm_existing:
+                pm_existing.role = pm.role
+                pm_existing.is_active = pm.is_active
+                pm_existing.save(update_fields=["role", "is_active"])
+                messages.success(request, "Member updated.")
+            else:
+                pm.save()
+                messages.success(request, "Member added.")
+            return redirect("projectApp:board", slug=slug)
+        messages.error(request, "Please fix errors below.")
+    else:
+        form = ProjectMemberAddForm(project=project)
+
+    members = project.members.select_related("user").order_by("role", "user__username")
+    title = f"{project.name} · Members"
+    ctx = dict(project=project, form=form, members=members)
+    ctx.update(base_ctx(request, title=title))
+    ctx["page_heading"] = title
+    return render(request, "projectApp_staff/manage_members.html", ctx)
+
+@login_required
+@require_POST
+def project_quick_task_create(request, slug: str):
+    project = get_object_or_404(Project, slug=slug)
+    _assert_edit_perm(request.user, project)
+    form = QuickTaskForm(request.POST)
+    if form.is_valid():
+        task = form.save(commit=False)
+        task.project = project
+        task.created_by = request.user
+        active = project.sprints.filter(is_active=True).order_by("start_date").first()
+        task.sprint = active
+        task.save()
+        form.save_m2m()
+        messages.success(request, "Task created.")
+    else:
+        messages.error(request, "Could not create task—check the fields.")
+    return redirect("projects_staff:project_board", slug=slug)
+
+# --- Create or toggle a sprint on the board ---
+
+@login_required
+@require_http_methods(["POST"])
+def project_create_sprint(request, slug: str):
+    project = get_object_or_404(Project, slug=slug)
+    _assert_edit_perm(request.user, project)
+    form = SprintForm(request.POST)
+    if form.is_valid():
+        s = form.save(commit=False)
+        s.project = project
+        s.save()
+        messages.success(request, "Sprint created.")
+    else:
+        messages.error(request, "Sprint not created—please fix errors.")
+    return redirect("projects_staff:project_board", slug=slug)
+
+@login_required
+@require_POST
+def project_toggle_active_sprint(request, slug: str, sprint_id: int):
+    project = get_object_or_404(Project, slug=slug)
+    _assert_edit_perm(request.user, project)
+    sprint = get_object_or_404(Sprint, pk=sprint_id, project=project)
+    sprint.is_active = not sprint.is_active
+    sprint.save(update_fields=["is_active"])
+    messages.success(request, f"Sprint '{sprint.name}' is now {'active' if sprint.is_active else 'inactive'}.")
+    return redirect("projects_staff:project_board", slug=slug)
+
+# --- Bulk move helper (optional) ---
+
+@login_required
+@require_POST
+def project_bulk_move(request, slug: str):
+    project = get_object_or_404(Project, slug=slug)
+    _assert_edit_perm(request.user, project)
+    form = MoveManyForm(request.POST, project=project)
+    task_ids = request.POST.getlist("task_ids")
+    if not task_ids:
+        messages.info(request, "No tasks selected.")
+        return redirect("projects_staff:project_board", slug=slug)
+    if form.is_valid():
+        with transaction.atomic():
+            qs = ProjectTask.objects.filter(project=project, pk__in=task_ids)
+            status = form.cleaned_data["status"]
+            sprint = form.cleaned_data["sprint"]
+            updates = {}
+            if status:
+                updates["status"] = status
+            if "sprint" in form.cleaned_data:
+                updates["sprint"] = sprint
+            if updates:
+                qs.update(**updates)
+        messages.success(request, f"Updated {len(task_ids)} task(s).")
+    else:
+        messages.error(request, "Invalid bulk update.")
+    return redirect("projects_staff:project_board", slug=slug)
+
+@require_POST
+@login_required
+def project_dnd_move(request, slug: str):
+    project = get_object_or_404(Project, slug=slug)
+    _assert_edit_perm(request.user, project)
+
+    try:
+        data = json.loads(request.body.decode("utf-8"))
+        task_id = data.get("task_id")
+        to_status = data.get("to_status")
+        after_id = data.get("after_id")
+
+        if not task_id or not to_status:
+            return JsonResponse({"ok": False, "error": "Missing fields"}, status=400)
+
+        task = get_object_or_404(ProjectTask, pk=task_id, project=project)
+
+        active_sprint = _current_board_scope(project)
+        scope_filter = {"project": project, "sprint": active_sprint} if active_sprint else {"project": project, "sprint__isnull": True}
+
+        with transaction.atomic():
+            # Save new status first
+            task.status = to_status
+            task.save(update_fields=["status"])
+
+            # Lock the target column (excluding the moving task)
+            col_qs = (
+                ProjectTask.objects
+                .select_for_update()
+                .filter(**scope_filter, status=to_status)
+                .exclude(pk=task.pk)
+                .order_by("sort_order", "pk")
+            )
+
+            # Rebuild exact DOM order
+            ordered = list(col_qs)
+            if after_id:
+                inserted = False
+                aid = int(after_id)
+                for idx, t in enumerate(ordered):
+                    if t.pk == aid:
+                        ordered.insert(idx + 1, task)
+                        inserted = True
+                        break
+                if not inserted:
+                    ordered.append(task)
+            else:
+                ordered.insert(0, task)
+
+            # Normalize to multiples of 10 (pure python ints)
+            for i, t in enumerate(ordered, start=1):
+                new_order = i * 10  # int
+                if t.sort_order != new_order:
+                    t.sort_order = new_order
+                    t.save(update_fields=["sort_order"])
+
+        return JsonResponse({"ok": True})
+
+    except Exception as e:
+        # TEMP: surface the exact server error in the client to pinpoint source
+        return JsonResponse({"ok": False, "error": f"{type(e).__name__}: {e}"}, status=500)
