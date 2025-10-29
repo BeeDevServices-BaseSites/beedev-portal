@@ -63,7 +63,7 @@
             </tr>
             {% for c in contacts %}
                 <tr>
-                    <td><a href="{% url 'userApp:view_client_profile' c.pk %}">{{c.username}}</a></td>
+                    <td><a href="{% url 'userApp:client_profile_staff' c.pk %}">{{c.username}}</a></td>
                     <td>{{c.first_name}} {{c.last_name}}</td>
                     <td>{{c.email}}</td>
                 </tr>

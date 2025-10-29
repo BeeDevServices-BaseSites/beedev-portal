@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% load page_title user_extras %}
+{% block content %}
+<head>
+    <link rel="stylesheet" href="{% static 'css/project.css'%}?v={% now 'U' %}">
+  </head>
+
+<h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
+
+{% if active_sprint %}
+  <p><strong>Active Sprint:</strong> {{ active_sprint.name }} ({{ active_sprint.start_date }}–{{ active_sprint.end_date }}) — {{ active_sprint.goal }}</p>
+{% else %}
+  <p><em>No active sprint — showing Backlog.</em></p>
+{% endif %}
+
+
+<div class="kanban">
+  {% for key, tasks in cols.items %}
+    <section class="col">
+      <h3>{{ key|title }}</h3>
+      {% for t in tasks %}
+        <div class="card">
+          <div><a href="{% url 'projects_staff:task_detail' t.pk %}"><strong>{{ t.title }}</strong></a></div>
+          <div class="meta">
+            <span>Priority: {{ t.priority }}</span>
+            {% if t.due_date %}<span class="badge">Due {{ t.due_date }}</span>{% endif %}
+            {% if t.assignees.all %}
+              <span>→ {% for u in t.assignees.all %}{{ u.preferred_name|default:u.username }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>
+            {% endif %}
+          </div>
+          {% with total=t.checklist.count done=t.checklist.all|dictsort:"done"|length %}
+            {% if total %}
+              <div class="meta">Checklist: {{ t.checklist.filter(done=True).count }} / {{ total }}</div>
+            {% endif %}
+          {% endwith %}
+        </div>
+      {% empty %}
+        <p class="meta">No tasks</p>
+      {% endfor %}
+    </section>
+  {% endfor %}
+</div>
+{% endblock %}

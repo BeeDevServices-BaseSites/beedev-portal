@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% load page_title user_extras %}
+{% block content %}
+<head>
+    <link rel="stylesheet" href="{% static 'css/project.css'%}?v={% now 'U' %}">
+  </head>
+
+<h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
+
+<form method="post">
+  {% csrf_token %}
+  <div class="grid" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+    <div>
+      <label>Company</label>
+      {{ form.company }}
+    </div>
+    <div>
+      <label>Proposal</label>
+      {{ form.proposal }}
+    </div>
+
+    <div style="grid-column:1 / span 2;">
+      <label>Name</label>
+      {{ form.name }}
+    </div>
+
+    <div style="grid-column:1 / span 2;">
+      <label>Description</label>
+      {{ form.description }}
+    </div>
+
+    <div style="grid-column:1 / span 2;">
+      <label>Scope Summary</label>
+      {{ form.scope_summary }}
+    </div>
+
+    <div>
+      <label>Manager</label>
+      {{ form.manager }}
+    </div>
+    <div>
+      <label>Priority</label>
+      {{ form.priority }}
+    </div>
+
+    <div>
+      <label>Status</label>
+      {{ form.status }}
+    </div>
+    <div>
+      <label>Stage</label>
+      {{ form.stage }}
+    </div>
+
+    <div>
+      <label>Start Date</label>
+      {{ form.start_date }}
+    </div>
+    <div>
+      <label>Target Launch</label>
+      {{ form.target_launch_date }}
+    </div>
+
+    <div>
+      <label>Client can view status</label>
+      {{ form.client_can_view_status }}
+    </div>
+    <div>
+      <label>Client can view links</label>
+      {{ form.client_can_view_links }}
+    </div>
+
+    <div style="grid-column:1 / span 2;">
+      <label>Client can view description</label>
+      {{ form.client_can_view_description }}
+    </div>
+
+    <div style="grid-column:1 / span 2;">
+      <label>Tags</label>
+      {{ form.tags }}
+    </div>
+  </div>
+
+  <div style="margin-top:1rem;">
+    <button class="button is-primary" type="submit">Create Project</button>
+    <a class="button" href="{% url 'projects_staff:home' %}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

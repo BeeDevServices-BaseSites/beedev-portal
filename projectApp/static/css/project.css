@@ -1,0 +1,87 @@
+:root {
+  --yellow: #F2DB1A;
+  --black: #000000;
+  --background: #F7F6F0;
+  --white: #F5F5F5;
+  --green: #426e54;
+  --yb_border: linear-gradient(5deg, #000000 25%, #f2db1a 75%);
+  --alt_green: #9FC6Af;
+  --grey: #aeacac;
+  --alt_grey: #8c8c8c;
+}
+* {
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+  font-family: 'Source Sans Pro', sans-serif;
+  font-display: swap;
+}
+.flexrow {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+.flexcolumn {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.yb-border {
+  border: 4px groove transparent;
+  border-image: var(--yb_border);
+  border-image-slice: 1;
+}
+body main .mini_menu {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  justify-content: space-evenly;
+  width: 100%;
+  margin-bottom: 1em;
+}
+body main .mini_menu a {
+  color: var(--black);
+  text-decoration: none;
+}
+body main .mini_menu a:hover {
+  color: var(--green);
+  text-decoration: underline;
+}
+.kanban {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1rem;
+}
+.col {
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  padding: 0.75rem;
+}
+.col h3 {
+  margin-top: 0;
+  font-size: 1.05rem;
+}
+.card {
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 0.6rem 0.7rem;
+  margin-bottom: 0.6rem;
+}
+.meta {
+  font-size: 0.85rem;
+  color: #555;
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.badge {
+  font-size: 0.8rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}

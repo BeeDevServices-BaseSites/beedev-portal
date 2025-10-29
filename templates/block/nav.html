@@ -23,7 +23,7 @@
                         {# Optional later:<a href="#">DNC Requests</a>#}
                     </div>
                 </details>
-                <a href="#">Projects</a>
+                <a href="{% url 'projects_staff:project_home' %}">Projects</a>
                 <a href="#">Tickets</a>
                 {# Team visible to Admin/Owner only #}
                 {% if request.user.role == "ADMIN" or request.user.role == "OWNER" %}

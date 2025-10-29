@@ -1,0 +1,28 @@
+@import './root/root.less';
+
+body {
+  main {
+    .mini_menu {
+            .flexrow();
+            justify-content: space-evenly;
+            width: 100%;
+            margin-bottom: 1em;
+
+            a {
+                color: var(--black);
+                text-decoration: none;
+            }
+            a:hover {
+                color: var(--green);
+                text-decoration: underline;
+            }
+        }
+  }
+}
+
+.kanban { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; }
+  .col { background: #fff; border: 1px solid #eee; border-radius: 10px; padding: .75rem; }
+  .col h3 { margin-top: 0; font-size: 1.05rem; }
+  .card { background: #fafafa; border: 1px solid #eee; border-radius: 8px; padding: .6rem .7rem; margin-bottom: .6rem; }
+  .meta { font-size: .85rem; color: #555; display:flex; gap:.75rem; flex-wrap:wrap; }
+  .badge { font-size: .8rem; padding: .1rem .4rem; border: 1px solid #ddd; border-radius: 6px; }
