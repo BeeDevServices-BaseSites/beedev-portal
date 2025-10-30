@@ -1,25 +1,27 @@
 # projectApp/views.py
-from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
-from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib import messages
-from django.views.decorators.http import require_POST
-from django.db.models import Prefetch, Max, Q
-from django.core.paginator import Paginator
 from core.utils.context import base_ctx
-from django.views.decorators.http import require_http_methods, require_POST
-from django.forms import modelform_factory
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
+from django.db.models import Prefetch, Max, Q
 from django.db import transaction
-from django.views.decorators.csrf import ensure_csrf_cookie
-import json
+from django.forms import modelform_factory
 from django.http import JsonResponse
+from django.shortcuts import render, get_object_or_404, redirect
+from django.views.decorators.http import require_http_methods, require_POST
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils import timezone
+from decimal import Decimal, ROUND_HALF_UP
+import json
+
 from companyApp.models import Company
 from ..models import (
     Project, ProjectTask, Sprint, TaskComment, TaskChecklistItem, TaskAttachment, ProjectMember
 )
 from ..forms import (
     TaskCommentForm, TaskChecklistItemForm, TaskAttachmentForm,
-    TaskMoveForm, TaskAssignSprintForm, ProjectCreateForm, ProjectMemberAddForm, QuickTaskForm, SprintForm, MoveManyForm
+    TaskMoveForm, TaskAssignSprintForm, ProjectCreateForm, ProjectMemberAddForm, QuickTaskForm, SprintForm, MoveManyForm, TaskProgressForm
 )
 
 # ---------------- Permissions ----------------
@@ -57,6 +59,14 @@ def _assert_edit_perm(user, project):
 def _can_admin_projects(user) -> bool:
     role = getattr(user, "role", None)
     return role in {user.Roles.OWNER, user.Roles.ADMIN, user.Roles.EMPLOYEE, user.Roles.HR}
+
+def _pct_from_checklist(task: ProjectTask) -> Decimal:
+    total = task.checklist.count()
+    if not total:
+        return Decimal("0.00")
+    done = task.checklist.filter(done=True).count()
+    pct = (Decimal(done) / Decimal(total)) * Decimal("100")
+    return pct.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 # ---------------- Base ----------------
 @login_required
@@ -177,8 +187,7 @@ def task_detail(request, pk: int):
         ProjectTask.objects.select_related("project", "sprint")
         .prefetch_related("assignees",
                           Prefetch("comments", queryset=TaskComment.objects.select_related("author", "parent").order_by("created_at", "pk")),
-                          Prefetch("checklist", queryset=TaskChecklistItem.objects.order_by("sort_order", "pk")),
-                          "attachments"),
+                          Prefetch("checklist", queryset=TaskChecklistItem.objects.select_related("created_by", "done_by").order_by("sort_order", "pk"),), "attachments"),
         pk=pk
     )
     project = task.project
@@ -215,6 +224,7 @@ def task_add_comment(request, pk: int):
         comment.task = task
         comment.author = request.user
         comment.save()
+        ProjectTask.objects.filter(pk=task.pk).update(updated_at=timezone.now())
         messages.success(request, "Comment added.")
     else:
         messages.error(request, "Could not add comment. Please fix errors.")
@@ -233,20 +243,36 @@ def task_add_checklist_item(request, pk: int):
         item.task = task
         item.created_by = request.user
         item.save()
+        ProjectTask.objects.filter(pk=task.pk).update(updated_at=timezone.now())
         messages.success(request, "Checklist item added.")
     else:
         messages.error(request, "Could not add checklist item.")
-    return redirect("projectApp:task_detail", pk=task.pk)
+    return redirect("projects_staff:task_detail", pk=task.pk)
 
 @require_POST
 @login_required
 def task_toggle_checklist_item(request, item_id: int):
     item = get_object_or_404(TaskChecklistItem.objects.select_related("task", "task__project"), pk=item_id)
     _assert_edit_perm(request.user, item.task.project)
+    now = timezone.now()
 
     item.done = not item.done
-    item.save(update_fields=["done"])
-    return redirect("projectApp:task_detail", pk=item.task.pk)
+    if item.done:
+        item.done_by = request.user
+        item.done_at = now
+    else:
+        item.done_by = None
+        item.done_at = None
+    item.save(update_fields=["done", "done_by", "done_at"])
+
+    ProjectTask.objects.filter(pk=item.task_id).update(updated_at=now)
+
+    if item.task.checklist.exists():
+        pct = _pct_from_checklist(item.task)
+        if pct != item.task.percent_complete:
+            item.task.percent_complete = pct
+            item.task.save(update_fields=["percent_complete"])
+    return redirect("projects_staff:task_detail", pk=item.task.pk)
 
 @require_POST
 @login_required
@@ -260,10 +286,11 @@ def task_upload_attachment(request, pk: int):
         att.task = task
         att.uploaded_by = request.user
         att.save()
+        ProjectTask.objects.filter(pk=task.pk).update(updated_at=timezone.now())
         messages.success(request, "Attachment uploaded.")
     else:
         messages.error(request, "Upload failed.")
-    return redirect("projectApp:task_detail", pk=task.pk)
+    return redirect("projects_staff:task_detail", pk=task.pk)
 
 @require_POST
 @login_required
@@ -278,7 +305,7 @@ def task_move_status(request, pk: int):
         messages.success(request, "Task status updated.")
     else:
         messages.error(request, "Invalid status.")
-    return redirect("projectApp:task_detail", pk=task.pk)
+    return redirect("projects_staff:task_detail", pk=task.pk)
 
 @require_POST
 @login_required
@@ -293,7 +320,7 @@ def task_assign_sprint(request, pk: int):
         messages.success(request, "Sprint assignment updated.")
     else:
         messages.error(request, "Could not update sprint.")
-    return redirect("projectApp:task_detail", pk=task.pk)
+    return redirect("projects_staff:task_detail", pk=task.pk)
 
 @login_required
 @require_http_methods(["GET", "POST"])
@@ -315,7 +342,7 @@ def project_manage_members(request, slug: str):
             else:
                 pm.save()
                 messages.success(request, "Member added.")
-            return redirect("projectApp:board", slug=slug)
+            return redirect("projects_staff:project_board", slug=slug)
         messages.error(request, "Please fix errors below.")
     else:
         form = ProjectMemberAddForm(project=project)
@@ -464,3 +491,57 @@ def project_dnd_move(request, slug: str):
     except Exception as e:
         # TEMP: surface the exact server error in the client to pinpoint source
         return JsonResponse({"ok": False, "error": f"{type(e).__name__}: {e}"}, status=500)
+
+@require_POST
+@login_required
+def task_update_progress(request, pk: int):
+    task = get_object_or_404(ProjectTask.objects.select_related("project"), pk=pk)
+    _assert_edit_perm(request.user, task.project)
+
+    form = TaskProgressForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, "Invalid progress value.")
+        return redirect("projects_staff:task_detail", pk=task.pk)
+
+    if form.cleaned_data.get("sync_from_checklist"):
+        pct = _pct_from_checklist(task)
+    else:
+        pct = form.cleaned_data.get("percent")
+        if pct is None:
+            messages.error(request, "Enter a percent or choose 'sync from checklist'.")
+            return redirect("projects_staff:task_detail", pk=task.pk)
+        pct = Decimal(pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    # Clamp to [0, 100]
+    pct = max(Decimal("0.00"), min(Decimal("100.00"), pct))
+
+    task.percent_complete = pct
+    task.save(update_fields=["percent_complete"])  # triggers project rollup signal
+    messages.success(request, f"Progress updated to {pct}%")
+    return redirect("projects_staff:task_detail", pk=task.pk)
+
+@require_POST
+@login_required
+def task_nudge_progress(request, pk: int, direction: str):
+    """
+    Quick +10 / -10 nudges. Use urls:
+      .../nudge/plus/  or  .../nudge/minus/
+    """
+    task = get_object_or_404(ProjectTask.objects.select_related("project"), pk=pk)
+    _assert_edit_perm(request.user, task.project)
+
+    step = Decimal("10.00")
+    if direction == "minus":
+        new_pct = task.percent_complete - step
+    else:
+        new_pct = task.percent_complete + step
+
+    new_pct = max(Decimal("0.00"), min(Decimal("100.00"), new_pct)).quantize(Decimal("0.01"))
+    if new_pct != task.percent_complete:
+        task.percent_complete = new_pct
+        task.save(update_fields=["percent_complete"])
+        messages.success(request, f"Progress {'decreased' if direction=='minus' else 'increased'} to {new_pct}%")
+    else:
+        messages.info(request, "Already at boundary (0% or 100%).")
+
+    return redirect("projects_staff:task_detail", pk=task.pk)

@@ -1,5 +1,6 @@
 # projectApp/forms.py
 from django import forms
+from decimal import Decimal
 from django.contrib.auth import get_user_model
 from .models import TaskComment, TaskChecklistItem, TaskAttachment, ProjectTask, Sprint, Project, ProjectMember
 
@@ -91,3 +92,13 @@ class MoveManyForm(forms.Form):
         super().__init__(*args, **kwargs)
         if project:
             self.fields["sprint"].queryset = project.sprints.all().order_by("-is_active", "start_date")
+
+class TaskProgressForm(forms.Form):
+    percent = forms.DecimalField(
+        max_digits=5, decimal_places=2, min_value=Decimal("0.00"), max_value=Decimal("100.00"),
+        required=False, help_text="0–100"
+    )
+    sync_from_checklist = forms.BooleanField(
+        required=False,
+        help_text="If checked, ignore the number above and derive % from checklist."
+    )

@@ -43,6 +43,101 @@ body {
          gap:1rem;
       }
     }
+    .detail {
+            .flexcolumn();
+            align-items: flex-start;
+            margin: 0 0 1em 0;
+            width: 75%;
+
+            h3 {
+                text-align: center;
+                background-color: var(--green);
+                color: var(--white);
+                width: 100%;
+                padding: 1em;
+                margin-bottom: .5em;
+                .yb-border();
+                font-size: 1.4em;
+            }
+            .form {
+              .flexrow();
+              width: 100%;
+              justify-content: space-between;
+
+              h3 {
+                color: var(--black);
+                background-color: var(--background);
+                border: none;
+                width: 30%;
+              }
+              form {
+                width: 50%;
+                justify-self: center;
+                .flexrow();
+
+                select {
+                  width: 300px;
+                }
+                input[type="number"] {
+                  width: 200px;
+                }
+              }
+            }
+            .span {
+              align-self: center;
+
+              input[type="text"] {
+                width: 400px;
+              }
+            }
+            .entry {
+                width: 100%;
+
+                .span {
+                  align-self: center;
+
+                  input[type="text"] {
+                    width: 400px;
+                  }
+                }
+
+                th {
+                    background-color: var(--background);
+                    color: var(--black);
+                    font-size: 1.1em;
+                    margin: 1em 0;
+                }
+                td {
+                    // width: 50%;
+                    text-align: left;
+                    padding-left: .5em;
+                }
+            }
+            .alt_entry {
+                margin: 1em 0;
+
+                th {
+                    font-size: 1.1em;
+                    background-color: var(--alt_green);
+                    color: var(--black);
+                }
+            }
+            tr:nth-child(odd) {
+                background-color: var(--grey);
+            }
+            tr:hover {
+                background-color: var(--alt_grey);
+            }
+            td {
+                padding: .5em 0;
+            }
+            .blank {
+                text-align: center;
+            }
+            .other {
+              width: 100%;
+            }
+        }
   }
 }
 

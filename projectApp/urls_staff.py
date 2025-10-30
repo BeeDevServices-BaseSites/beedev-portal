@@ -28,6 +28,8 @@ urlpatterns = [
     path("task/<int:pk>/attachment/upload/", views.task_upload_attachment, name="task_upload_attachment"),
     path("task/<int:pk>/move/", views.task_move_status, name="task_move_status"),
     path("task/<int:pk>/sprint/", views.task_assign_sprint, name="task_assign_sprint"),
+    path("task/<int:pk>/progress/", views.task_update_progress, name="task_update_progress"),
+    path("task/<int:pk>/nudge/<str:direction>/", views.task_nudge_progress, name="task_nudge_progress"),
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

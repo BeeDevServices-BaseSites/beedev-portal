@@ -74,6 +74,103 @@ body main table .grid {
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
 }
+body main .detail {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  align-items: flex-start;
+  margin: 0 0 1em 0;
+  width: 75%;
+}
+body main .detail h3 {
+  text-align: center;
+  background-color: var(--green);
+  color: var(--white);
+  width: 100%;
+  padding: 1em;
+  margin-bottom: 0.5em;
+  border: 4px groove transparent;
+  border-image: var(--yb_border);
+  border-image-slice: 1;
+  font-size: 1.4em;
+}
+body main .detail .form {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  justify-content: space-between;
+}
+body main .detail .form h3 {
+  color: var(--black);
+  background-color: var(--background);
+  border: none;
+  width: 30%;
+}
+body main .detail .form form {
+  width: 50%;
+  justify-self: center;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+body main .detail .form form select {
+  width: 300px;
+}
+body main .detail .form form input[type="number"] {
+  width: 200px;
+}
+body main .detail .span {
+  align-self: center;
+}
+body main .detail .span input[type="text"] {
+  width: 400px;
+}
+body main .detail .entry {
+  width: 100%;
+}
+body main .detail .entry .span {
+  align-self: center;
+}
+body main .detail .entry .span input[type="text"] {
+  width: 400px;
+}
+body main .detail .entry th {
+  background-color: var(--background);
+  color: var(--black);
+  font-size: 1.1em;
+  margin: 1em 0;
+}
+body main .detail .entry td {
+  text-align: left;
+  padding-left: 0.5em;
+}
+body main .detail .alt_entry {
+  margin: 1em 0;
+}
+body main .detail .alt_entry th {
+  font-size: 1.1em;
+  background-color: var(--alt_green);
+  color: var(--black);
+}
+body main .detail tr:nth-child(odd) {
+  background-color: var(--grey);
+}
+body main .detail tr:hover {
+  background-color: var(--alt_grey);
+}
+body main .detail td {
+  padding: 0.5em 0;
+}
+body main .detail .blank {
+  text-align: center;
+}
+body main .detail .other {
+  width: 100%;
+}
 .kanban {
   display: grid;
   grid-template-columns: repeat(5, 1fr);

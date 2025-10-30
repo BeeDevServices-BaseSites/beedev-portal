@@ -33,8 +33,12 @@ def _allowed_management(u: User) -> bool:
 @login_required
 def post_login(request):
     u = request.user
-    if getattr(u, "is_staff", False) or getattr(u, "role", None) == "EMPLOYEE":
+
+    if _allowed_upper_management(u):
         return redirect("admin:index")
+    
+    if _allowed_all_staff(u) or getattr(u, "is_staff", False) or getattr(u, "is_superuser", False):
+        return redirect("userApp:employee_home")
 
     return redirect("userApp:client_home")
 
@@ -46,37 +50,40 @@ def staff_home(request):
 def employee_home(request):
     user = request.user
     if not _allowed_all_staff(request.user):
-        raise redirect("userApp:client_home")
+        return redirect("userApp:client_home")
     
-    drafts = ProposalDraft.objects.all()
+    drafts_qs = ProposalDraft.objects.all()
+    events_qs = ProposalEvent.objects.select_related("actor").order_by("-at", "pk")
     proposals_qs = (
         Proposal.objects
         .select_related("company")
         .annotate(last_event_at=Max("events__at"))
-        .prefetch_related(
-            Prefetch(
-                "events",
-                queryset=ProposalEvent.objects.select_related("actor").order_by("-at", "pk")
-            )
-        )
+        .prefetch_related(Prefetch("events", queryset=events_qs))
         .order_by("-last_event_at", "-created_at")
     )
-    proposals = list(proposals_qs)
-    last_events_by_id = {
-        p.id: (p.events.all()[0] if p.events.all() else None)
-        for p in proposals
-    }
     users = User.objects.all()
     projects = Project.objects.all()
     
     if _allowed_upper_management(request.user):
-        admin_drafts = drafts.filter(approval_status="SUBMITTED")
-        drafts = drafts.exclude(approval_status__in=["SUBMITTED", "CONVERTED"])
-        dash = {"drafts": drafts, "admin_drafts": admin_drafts, "proposals": proposals, "users": users, "last_events_by_id": last_events_by_id}
-    elif _allowed_staff(request.user): 
-        drafts = drafts.filter(created_by_id=user.id)
-        proposals = proposals.filter(created_by_id=user.id)
-        dash = {"drafts": drafts, "proposals": proposals, "last_events_by_id": last_events_by_id}
+        admin_drafts = drafts_qs.filter(approval_status="SUBMITTED")
+        drafts_qs = drafts_qs.exclude(approval_status__in=["SUBMITTED", "CONVERTED"])
+        proposals = list(proposals_qs)
+        last_events_by_id = {
+            p.id: (p.events.all()[0] if p.events.all() else None)
+            for p in proposals
+        }
+        dash = {"drafts": drafts_qs, "admin_drafts": admin_drafts, "proposals": proposals, "users": users, "last_events_by_id": last_events_by_id, "projects": projects}
+
+    else: 
+        drafts_qs = drafts_qs.filter(created_by_id=user.id)
+        proposals_qs = proposals_qs.filter(created_by_id=user.id)
+        proposals = list(proposals_qs)
+        last_events_by_id = {
+            p.id: (p.events.all()[0] if p.events.all() else None)
+            for p in proposals
+        }
+        dash = {"drafts": drafts_qs, "proposals": proposals, "last_events_by_id": last_events_by_id, "projects": projects}
+        
     ctx = {"user_obj": user, "read_only": True, 'dash': dash}
     title = "BeeDev Services Work Dashboard"
     ctx.update(base_ctx(request, title=title))

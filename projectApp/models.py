@@ -6,7 +6,7 @@ from django.conf import settings
 from django.utils.text import slugify
 from django.core.validators import FileExtensionValidator, MinValueValidator, MaxValueValidator
 from django.core.exceptions import ValidationError
-from django.db.models import Sum, F, Case, When
+from django.db.models import Sum, F, Case, When, Value, DecimalField, ExpressionWrapper, Avg
 from django.db.models.signals import post_save, m2m_changed
 from django.dispatch import receiver
 
@@ -165,7 +165,7 @@ class Sprint(models.Model):
 # ======================================================================
 
 def default_story_points():
-    return Decimal("0")
+    return Decimal("0.00")
 
 class ProjectTask(models.Model):
     class Status(models.TextChoices):
@@ -415,6 +415,11 @@ class TaskChecklistItem(models.Model):
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    done_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="checklist_items_completed"
+    )
+    done_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         ordering = ("sort_order", "pk")
 
@@ -474,23 +479,47 @@ def _percent(value: Decimal) -> Decimal:
 def project_task_rollup(project_id: int) -> Decimal:
     """
     Weighted completion by estimated_hours; if hours are 0, fall back to flat average.
+    All arithmetic stays in Decimal, with explicit output_field on expressions.
     """
     qs = ProjectTask.objects.filter(project_id=project_id)
+
+    # total_hours as Decimal
     agg = qs.aggregate(
-        total_hours=Sum("estimated_hours"),
-        weighted=Sum(F("percent_complete") * Case(
-            When(estimated_hours__gt=0, then=F("estimated_hours")),
-            default=1
-        ))
+        total_hours=Sum(
+            "estimated_hours",
+            output_field=DecimalField(max_digits=12, decimal_places=2),
+        ),
+        # weighted = Sum(percent_complete * weight)
+        # where weight = estimated_hours if > 0 else 1.00 (Decimal)
+        weighted=Sum(
+            ExpressionWrapper(
+                F("percent_complete") * Case(
+                    When(
+                        estimated_hours__gt=0,
+                        then=F("estimated_hours"),
+                    ),
+                    default=Value(Decimal("1.00")),
+                    output_field=DecimalField(max_digits=12, decimal_places=2),
+                ),
+                output_field=DecimalField(max_digits=12, decimal_places=2),
+            ),
+            output_field=DecimalField(max_digits=12, decimal_places=2),
+        ),
     )
-    total_hours = agg["total_hours"] or Decimal("0")
-    weighted = agg["weighted"] or Decimal("0")
+
+    total_hours = agg["total_hours"] or Decimal("0.00")
+    weighted = agg["weighted"] or Decimal("0.00")
+
     if total_hours > 0:
+        # weighted / total_hours → Python Decimal division
         pct = _safe_div(weighted, total_hours)
     else:
-        count = qs.count() or 1
-        flat = qs.aggregate(avg=Sum("percent_complete") / count)["avg"] or Decimal("0")
-        pct = flat
+        # Flat average percent_complete across tasks (DB-side Avg with DecimalField)
+        avg = qs.aggregate(
+            avg=Avg("percent_complete", output_field=DecimalField(max_digits=5, decimal_places=2))
+        )["avg"]
+        pct = avg if avg is not None else Decimal("0.00")
+
     return _percent(pct)
 
 def _sync_project_percent(project: Project):
