@@ -14,6 +14,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.units import inch
 from weasyprint import HTML, CSS
+from django.templatetags.static import static as static_url
 
 try:
     import markdown as _md
@@ -221,6 +222,36 @@ def _pdf_context(proposal) -> dict:
         "client_signature": _client_signature_ctx(proposal),
     }
 
+def _abs_url(request, path: str) -> str:
+    """
+    Build an absolute HTTP(S) URL for 'path' (which can already be absolute).
+    Falls back to settings.SITE_URL if request is None.
+    """
+    if path.startswith("http://") or path.startswith("https://"):
+        return path
+    base = (request.build_absolute_uri("/") if request else getattr(settings, "SITE_URL", "").rstrip("/") + "/")
+    return base.rstrip("/") + "/" + path.lstrip("/")
+
+def _css_list_with_fallback(css_static_paths: list[str], request):
+    """
+    Try to load CSS via HTTP(S) absolute URLs first. If prod renderer cannot reach
+    the host or you prefer not to make HTTP calls, we also add filesystem CSS via
+    Django staticfiles finders as a fallback.
+    """
+    css_objs = []
+
+    # Primary: absolute HTTP(S) URLs for CSS
+    for rel in css_static_paths:
+        url = _abs_url(request, static_url(rel))
+        css_objs.append(CSS(url=url))
+
+    # Fallback: filesystem CSS (works even if HTTP is blocked)
+    for rel in css_static_paths:
+        fs = finders.find(rel)  # e.g. "css/proposal-pdf.css" → "/app/static/css/proposal-pdf.css"
+        if fs:
+            css_objs.append(CSS(filename=fs))
+    return css_objs
+
 def generate_proposal_pdf(
     proposal,
     *,
@@ -246,7 +277,11 @@ def generate_proposal_pdf(
 
     html_string = render_to_string(template_name, ctx, request=request)
 
-    css_list = _static_css(css_static_paths or ["css/proposal-pdf.css"])
+    if not base_url:
+        base_url = (request.build_absolute_uri("/") if request else getattr(settings, "SITE_URL", None)) or "http://localhost/"
+
+    css_paths = css_static_paths or ["css/proposal-pdf.css"]
+    css_list = _css_list_with_fallback(css_paths, request)
 
     pdf_bytes = HTML(string=html_string, base_url=base_url).write_pdf(stylesheets=css_list)
     if COMPANY_SIGNATURE_STAMP_ENABLED:

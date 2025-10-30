@@ -5,6 +5,11 @@
     <meta charset="utf-8">
     <title>{{ proposal.title }} — Proposal</title>
     <link rel="stylesheet" href="{% static 'css/proposal-pdf.css' %}">
+    <style>
+  @page { size: A4; margin: 1in; }
+  html { color-scheme: light only; }
+  body { color:#000 !important; background:#fff !important; font:14px "DejaVu Sans", Arial, sans-serif; }
+</style>
   </head>
   <body>
     <div class="pdf-running-header">

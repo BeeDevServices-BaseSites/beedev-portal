@@ -121,11 +121,14 @@ PROPOSAL_SIGNING_URL_BASE = "http://127.0.0.1:8000/p"
 # PROPOSAL_PUBLIC_BASE_URL = os.environ.get("PROPOSAL_PUBLIC_BASE_URL", "https://portal.beedev-services.com")
 PROPOSAL_PUBLIC_BASE_URL = env("PROPOSAL_PUBLIC_BASE_URL", default="http://127.0.0.1:8000")
 PROPOSAL_ACCOUNT_SIGNUP_URL = os.getenv("PROPOSAL_ACCOUNT_SIGNUP_URL", "/invite/register/")
+# SITE_URL = os.environ.get("SITE_URL", "http://127.0.0.1:8000/")
+SITE_URL = env("SITE_URL", default="http://127.0.0.1:8000/")
 
 # Dotted-callables (set now or later)
 PROPOSAL_ACCOUNT_CREATOR = "proposalApp.services.hooks:create_account_for_signed_proposal"
 PROPOSAL_INVOICE_CREATOR = "proposalApp.services.hooks:create_invoice_for_deposit"
 PROPOSAL_MESSENGER       = "proposalApp.services.hooks:send_proposal_email"
+
 
 # -------- Branding for PDFs --------
 BRAND_NAME = "BeeDev Services"
