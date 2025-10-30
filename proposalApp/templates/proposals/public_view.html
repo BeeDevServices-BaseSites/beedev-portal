@@ -1,121 +1,142 @@
-{% load static %}
-<!doctype html>
-<html lang="en">
+{% extends "base.html" %}
+{% load i18n static %}
+{% load page_title user_extras %}
+{% block content %}
   <head>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <title>Proposal — {{ proposal.company.name }}</title>
     <link rel="stylesheet" href="{% static 'css/proposal-pdf.css' %}?v={% now 'U' %}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
   </head>
-  <body>
-    <header class="brand">
-      <div class="brand-inner">
-        <img src="{% static 'images/logo.png' %}" alt="{{ proposal.company.name }}" class="logo">
-        <div class="brand-meta">
-          <h1 class="title">{{ proposal.title }}</h1>
-          <div class="sub">for {{ proposal.company.name }} on {{ proposal.created_at|date:"F j, Y" }}</div>
-        </div>
+
+  <h1 class="title">
+    {{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}
+  </h1>
+
+  <div class="public-actions">
+    {% if proposal.pdf %}
+      <a class="btn" href="{{ proposal.pdf.url }}" target="_blank" rel="noopener">Download PDF</a>
+    {% endif %}
+    {% if not proposal.signed_at %}
+      <a class="btn primary" href="{% url 'proposal_public:proposal_public_sign' proposal.sign_token %}">Sign this Proposal</a>
+    {% else %}
+      <span class="badge">Signed on {{ proposal.signed_at|date:"F j, Y, g:i a T" }}</span>
+    {% endif %}
+  </div>
+
+  <!DOCTYPE html>
+  <div id="pdf-like-root">
+    <div class="doc-header">
+      <h1 class="doc-title">{{ proposal.title }}</h1>
+      <div class="doc-meta">
+        <p><strong>Company:</strong> {{ company_name }}</p>
+        <p><strong>Date:</strong> {{ proposal_date|date:"F j, Y" }}</p>
       </div>
-    </header>
+    </div>
 
-    <main class="container">
-      <section class="summary">
-        {% if summary_md %}
-          <h2>Executive Summary</h2>
-          <div class="md">
-            {# keep it simple: render as paragraphs; swap to a markdown renderer later #}
-            {{ summary_md|linebreaksbr }}
-          </div>
-        {% endif %}
-      </section>
+    <section class="section">
+      <h2>Quote Summary</h2>
+      <ul class="bullets">
+        <li><strong>Total:</strong> ${{ quote_total }}</li>
+        <li><strong>Domain Handling:</strong> {{ domain_text }}</li>
+        <li><strong>Hosting:</strong> {{ hosting_text }}</li>
+        <li><strong>Estimated Man-hours:</strong> {{ hours_total }} (includes overhead)</li>
+      </ul>
+    </section>
 
-      <section class="line-items">
-        <h2>Scope & Pricing</h2>
-        <table class="items">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th class="qty">Qty</th>
-              <th class="amt">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for i in items %}
-              <tr>
-                <td>
-                  <div class="item-name">{{ i.name }}</div>
-                  {% if i.description %}
-                    <div class="item-desc">{{ i.description }}</div>
-                  {% endif %}
-                </td>
-                <td class="qty">{{ i.quantity }}</td>
-                <td class="amt">${{ i.line_total }}</td>
-              </tr>
-            {% empty %}
-              <tr><td colspan="3"><em>No items.</em></td></tr>
-            {% endfor %}
-          </tbody>
-          <tfoot>
-            <tr>
-              <th colspan="2" class="label">Subtotal</th>
-              <th class="amt">${{ proposal.amount_subtotal }}</th>
-            </tr>
-            {% if proposal.discount_total and proposal.discount_total|floatformat != "0" %}
-              <tr>
-                <th colspan="2" class="label">Discount</th>
-                <th class="amt">- ${{ proposal.discount_total }}</th>
-              </tr>
-            {% endif %}
-            {% if proposal.amount_tax and proposal.amount_tax|floatformat != "0" %}
-              <tr>
-                <th colspan="2" class="label">Tax</th>
-                <th class="amt">${{ proposal.amount_tax }}</th>
-              </tr>
-            {% endif %}
-            <tr class="grand">
-              <th colspan="2" class="label">Total</th>
-              <th class="amt">${{ proposal.amount_total }} {{ proposal.currency }}</th>
-            </tr>
-          </tfoot>
-        </table>
-      </section>
+    {% if summary_html %}
+    <section class="section">
+      <h2>Included in Proposal</h2>
+      <div class="markdown">
+        {{ summary_html|safe }}
+      </div>
+    </section>
+    {% endif %}
 
-      <section class="hours">
-        <h2>Estimated Hours</h2>
-        <p>
-          {% if proposal.hours_total %}
-            {{ proposal.hours_total }} hours (includes overhead)
-          {% elif proposal.hours_subtotal %}
-            {{ proposal.hours_subtotal }} hours
-          {% else %}
-            <em>Not specified</em>
-          {% endif %}
-        </p>
-      </section>
+    <section class="section">
+      <h2>Maintenance &amp; Hosting</h2>
+      <ul class="bullets">
+        <li><strong>Domain:</strong> {{ domain_text }}</li>
+        <li><strong>Hosting:</strong> {{ hosting_text }}</li>
+      </ul>
+    </section>
 
-      {% if notes %}
-        <section class="notes">
-          <h2>Notes</h2>
-          {% for n in notes %}
-            <div class="note">
-              {% if n.subject %}<h3>{{ n.subject }}</h3>{% endif %}
-              <div class="note-body">{{ n.body_md|linebreaksbr }}</div>
+    {% if notes_blocks %}
+    <section class="section">
+      <h2>Project Overview</h2>
+      <ul class="notes-list">
+        {% for n in notes_blocks %}
+          <li class="note-item">
+            <ul class="bullets">
+              <li class="note-subject"><strong>{{ n.subject }}</strong></li>
+              <ul>
+                <li class="markdown">{{ n.body_html|safe }}</li>
+              </ul>
+            </ul>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    <section class="section">
+      <h2>Add-ons</h2>
+      <p class="muted">Additional services can be added on request.</p>
+    </section>
+
+    <section class="section">
+      <h2>Payment Details</h2>
+      <ul class="bullets">
+        <li><strong>Deposit required to begin:</strong> ${{ deposit_amount }}</li>
+        <li><strong>Remaining balance:</strong> ${{ remaining_due }}</li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2>Terms</h2>
+      <p>Proposal valid for <strong>{{ valid_days }}</strong> days (until <strong>{{ valid_until|date:"F j, Y" }}</strong>).</p>
+    </section>
+
+    <section class="section signatures">
+      <h2>Acceptance</h2>
+      <table class="sig-table">
+        <tr>
+          <td>
+            <div class="sig-line">
+              {% if client_signature.signed %}
+                <span class="sig-hand">{{client_signature.name}}</span>
+              {% else %}
+              Signature needed
+              {% endif %}
             </div>
-          {% endfor %}
-        </section>
-      {% endif %}
-
-      <section class="actions">
-        {% if can_download_pdf %}
-          <a class="btn" href="{{ proposal.pdf.url }}" target="_blank" rel="noopener">Download PDF</a>
-        {% endif %}
-        {# Signing will come next; placeholder button: #}
-        <a class="btn primary" href="#">Sign this Proposal</a>
-      </section>
-    </main>
-
-    <footer class="ft">
-      <div>&copy;{{ proposal.created_at|date:"Y" }} {{ proposal.company.name }}</div>
-    </footer>
-  </body>
-</html>
+            <div class="sig-label">Client Signature ({{ company_name }})</div>
+          </td>
+          <td>
+            <div class="sig-line">{{ client_signature.signed_at|date:"M j, Y" }}</div>
+            <div class="sig-label">Date</div>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="sig-line">
+              {% if proposal.countersigned_at %}
+                {% with signer=proposal.countersigned_by.get_full_name|default:proposal.countersigned_by.email %}
+                  <span class="sig-hand">{{ signer }}</span>
+                {% endwith %}
+              {% endif %}
+            </div>
+            <div class="sig-label">BeeDev Services Representative</div>
+          </td>
+          <td>
+            <div class="sig-line">
+              {% if proposal.countersigned_at %}
+                {{ proposal.countersigned_at|date:"M j, Y" }}
+              {% endif %}
+            </div>
+            <div class="sig-label">Date</div>
+          </td>
+        </tr>
+      </table>
+    </section>
+  </div>
+{% endblock content %}

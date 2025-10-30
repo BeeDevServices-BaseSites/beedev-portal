@@ -8,4 +8,24 @@
   </head>
   <h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
 
+  {% if proposals %}
+
+    {% for bucket in proposals %}
+      <p>{{bucket.company.name}}</p>
+
+          {% if bucket.signed %}
+            {% for p in bucket.signed %}
+              <p>{{p.title}}</p>
+            {% endfor %}
+          {% endif %}
+
+          {% if bucket.due %}
+            {% for d in bucket.due %}
+              <p>{{d.title}}</p>
+            {% endfor %}
+          {% endif %}
+
+    {% endfor %}
+  {% endif %}
+
 {% endblock content %}

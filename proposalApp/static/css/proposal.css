@@ -55,6 +55,18 @@ body main .mini_menu a:hover {
   color: var(--green);
   text-decoration: underline;
 }
+body main .mini_menu .mini_form {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  align-items: flex-start;
+}
+body main .mini_menu .mini_form label,
+body main .mini_menu .mini_form input,
+body main .mini_menu .mini_form button {
+  margin: 0.4em 0;
+}
 body main table {
   width: 50%;
   margin: 1em;
@@ -175,4 +187,20 @@ body main form .box .grid .formHeader label .required {
 }
 body main form .box .entry {
   width: 95%;
+}
+body main .sign {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 50%;
+}
+body main .sign .altbox {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  width: 75%;
+  justify-content: space-evenly;
+  margin: 1em 0;
 }

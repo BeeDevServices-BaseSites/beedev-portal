@@ -3,7 +3,7 @@ from django.core.exceptions import PermissionDenied
 from django.shortcuts import render, get_object_or_404, redirect
 from ..models import User, ClientProfile, EmployeeProfile
 from prospectApp.models import Prospect
-from companyApp.models import CompanyContact, Company
+from companyApp.models import CompanyContact, Company, CompanyMembership
 from core.utils.context import base_ctx
 from django.db.models import Q
 from django.urls import reverse
@@ -97,3 +97,20 @@ def view_all_clients(request):
     ctx.update(base_ctx(request, title=title))
     ctx['page_heading'] = title
     return render(request, "userApp/staff/view_all_contacts.html", ctx)
+
+# @login_required
+# def view_client_profile(request, pk: int):
+#     user = request.user
+#     if not _allowed_management(request.user):
+#         raise PermissionDenied("Not allowed")
+    
+#     client = get_object_or_404(User, pk=pk)
+#     profile = get_object_or_404(ClientProfile, user=client)
+#     company_membership = get_object_or_404(CompanyMembership, user_id=pk)
+#     company = get_object_or_404(Company, pk=company_membership.company_id)
+#     title = f"{client.preferred_name}'s Profile"
+#     print('client:', client.first_name, 'profile:', profile, 'company:', company)
+#     ctx = {"user_obj": user, "client": client, "profile": profile, "company": company}
+#     ctx.update(base_ctx(request, title=title))
+#     ctx["page_heading"] = title
+#     return render(request, "userApp/staff/view_client_profile.html", ctx)

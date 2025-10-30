@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% load page_title user_extras %}
+
+{% block content %}
+<head>
+    <link rel="stylesheet" href="{% static 'css/company.css'%}?v={% now 'U' %}">
+</head>
+<h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
+
+<h3>Current Members</h3>
+<table class="table">
+  <thead><tr><th>User</th><th>Role</th><th>Active</th><th>Since</th></tr></thead>
+  <tbody>
+    {% for m in members %}
+      <tr>
+        <td>{{ m.user.preferred_name|default:m.user.username }}</td>
+        <td>{{ m.get_role_display }}</td>
+        <td>{% if m.is_active %}✅{% else %}—{% endif %}</td>
+        <td>{{ m.added_at }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4"><em>No members yet.</em></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<hr>
+<h3>Add / Update Member</h3>
+<form method="post">
+  {% csrf_token %}
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;max-width:700px;">
+    <div>
+      <label>User</label>
+      {{ form.user }}
+    </div>
+    <div>
+      <label>Role</label>
+      {{ form.role }}
+    </div>
+    <div>
+      <label>Active</label><br>
+      {{ form.is_active }}
+    </div>
+  </div>
+  <div style="margin-top:1rem;">
+    <button class="button is-primary" type="submit">Save</button>
+    <a class="button" href="{% url 'projects_staff:project_board' project.slug %}">Back to Board</a>
+  </div>
+</form>
+{% endblock %}

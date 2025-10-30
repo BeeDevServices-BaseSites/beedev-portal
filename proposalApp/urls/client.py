@@ -1,6 +1,6 @@
 from django.urls import path, reverse_lazy
-from . import views
-from .views import *
+from .. import views
+from ..views import *
 from django.conf import settings
 from django.conf.urls.static import static
 

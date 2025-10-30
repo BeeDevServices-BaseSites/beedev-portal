@@ -1,5 +1,11 @@
 # Build notes:
 
+# As of 10/28:
+- Created a new prospect, updated prospect, converted prospect => auto created company, created draft, updated draft, approved draft => converted to proposal, sent proposal, received => signed and received email with links, created account => able to view profile.
+
+# As of 10/9:
+- Styled linked proposal from email.  Email good.
+
 # As of 10/8:
 - Styled pdf
 - Sent pdf - need to remove the attachment and leave just the link

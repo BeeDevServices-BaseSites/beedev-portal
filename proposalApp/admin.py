@@ -1,11 +1,19 @@
 # proposalApp/admin.py
+from django.core.mail import EmailMultiAlternatives
+from django.urls import reverse, NoReverseMatch
+from urllib.parse import urljoin
+from django.conf import settings
+from decimal import Decimal, ROUND_HALF_UP
 from django.contrib import admin, messages
 from django.db import transaction
+from django.db.models import Sum, Q
+from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
-from django.db.models import Sum
-from decimal import Decimal
-
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from .models import proposal_pdf_upload_to
+from proposalApp.services import pdf_stamp
 from companyApp.models import CompanyMembership
 from userApp.models import User
 from .models import (
@@ -26,9 +34,18 @@ from .models import (
     ProposalSection,
     ProposalNote,
     ProposalSummary,
+    ProposalAccountInvite
 )
 
-# -------- permission helpers --------
+try:
+    from django.contrib.sites.models import Site
+except Exception:
+    Site = None
+
+# =========================
+# Permission helpers
+# =========================
+
 def is_owner(u):
     return u.is_active and (u.is_superuser or u.groups.filter(name="Owner").exists())
 
@@ -41,9 +58,165 @@ def is_hr(u):
 def is_plain_staff(u):
     return u.is_active and u.is_staff and not is_owner(u) and not is_admin(u) and not is_hr(u)
 
-# ---------------------------
+
+# =========================
+# Money & totals helpers
+# =========================
+
+def q2(val):
+    """Quantize to cents with HALF_UP rounding."""
+    if val is None:
+        val = Decimal("0")
+    return Decimal(val).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+def _recompute_proposal_totals(p: Proposal):
+    discounts_sum = p.applied_discounts.aggregate(s=Sum("amount_applied"))["s"] or Decimal("0.00")
+    p.discount_total = q2(discounts_sum)
+    p.amount_total = q2((p.amount_subtotal or 0) - p.discount_total)
+
+    p.amount_total = q2((p.amount_subtotal or 0) - p.discount_total)
+    if p.amount_total < Decimal("0.00"):
+        p.amount_total = Decimal("0.00")
+
+    if p.deposit_type == ProposalDraft.DepositType.PERCENT:
+        dep = q2((p.amount_subtotal or 0) * (p.deposit_value or 0) / Decimal("100"))
+    elif p.deposit_type == ProposalDraft.DepositType.FIXED:
+        dep = q2(p.deposit_value or 0)
+    else:
+        dep = Decimal("0.00")
+
+    if p.amount_total <= Decimal("0.00"):
+        dep = Decimal("0.00")
+    elif dep > p.amount_total:
+        dep = p.amount_total
+
+    p.deposit_amount = dep
+    p.remaining_due = q2(p.amount_total - dep)
+    p.save(update_fields=["discount_total", "amount_total", "deposit_amount", "remaining_due", "updated_at"])
+
+# =========================
+# Email Helpers
+# =========================
+
+def _public_base_url() -> str:
+    base = getattr(settings, "PROPOSAL_PUBLIC_BASE_URL", None)
+    if base:
+        return base.rstrip("/")
+
+    if Site is not None:
+        try:
+            current = Site.objects.get_current()
+            if getattr(current, "domain", None):
+                scheme = getattr(settings, "DEFAULT_HTTP_SCHEME", "https")
+                return f"{scheme}://{current.domain}".rstrip("/")
+        except Exception:
+            pass
+
+    return "http://127.0.0.1:8000"
+
+def _abs_url(url_or_path: str | None) -> str | None:
+    if not url_or_path:
+        return None
+    if url_or_path.startswith("http://") or url_or_path.startswith("https://"):
+        return url_or_path
+    base = _public_base_url()
+    return urljoin(base + "/", url_or_path.lstrip("/"))
+
+def _account_signup_link(email: str | None) -> str | None:
+    base = getattr(settings, "PROPOSAL_ACCOUNT_SIGNUP_URL", None)
+    if not base:
+        try:
+            base = reverse("user_invite:register")
+        except NoReverseMatch:
+            base = None
+    if not base:
+        try:
+            base = reverse("account_signup")
+        except NoReverseMatch:
+            base = None
+    if not base:
+        return None
+
+    base_abs = _abs_url(base)
+    if email:
+        sep = "&" if "?" in base_abs else "?"
+        return f"{base_abs}{sep}email={email}"
+    return base_abs
+
+def _send_links_email(proposal, *, to_email: str, include_pdf: bool, include_signup: bool) -> bool:
+    pdf_url = _abs_url(getattr(getattr(proposal, "pdf", None), "url", None)) if include_pdf else None
+    email_for_signup = (proposal.contact_email or to_email or "").strip() or None
+    signup_url = _proposal_invite_link(proposal) if include_signup else None
+
+    if not (pdf_url or signup_url):
+        return False
+
+    subject = f"Proposal Links: {proposal.title} — {proposal.company.name}"
+
+    greet = (f"Hi {proposal.contact_name}".strip() if proposal.contact_name else "Hello,")
+    lines = [greet, "", "Here are your proposal links:"]
+    if pdf_url:
+        lines.append(f"- Signed PDF: {pdf_url}")
+    if signup_url:
+        lines.append(f"- Create your account: {signup_url}")
+    lines += ["", "If you have any questions, just reply to this email.", "", "— BeeDev Services"]
+    body_txt = "\n".join(lines)
+
+    html_parts = [f"<p>{greet}</p>", "<p>Here are your proposal links:</p>", "<ul>"]
+    if pdf_url:
+        html_parts.append(f'<li>Signed PDF: <a href="{pdf_url}" target="_blank" rel="noopener">{pdf_url}</a></li>')
+    if signup_url:
+        html_parts.append(f'<li>Create your account: <a href="{signup_url}" target="_blank" rel="noopener">{signup_url}</a></li>')
+    html_parts.append("</ul><p>If you have any questions, just reply to this email.</p><p>— BeeDev Services</p>")
+    body_html = "".join(html_parts)
+
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=body_txt,
+        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+        to=[to_email],
+        cc=(getattr(settings, "PROPOSAL_CC", "") or "").split(",") if getattr(settings, "PROPOSAL_CC", "") else [],
+        bcc=(getattr(settings, "PROPOSAL_BCC", "") or "").split(",") if getattr(settings, "PROPOSAL_BCC", "") else [],
+        reply_to=[getattr(settings, "PROPOSAL_REPLY_TO", "")] if getattr(settings, "PROPOSAL_REPLY_TO", "") else None,
+    )
+    msg.attach_alternative(body_html, "text/html")
+    try:
+        msg.send(fail_silently=False)
+        return True
+    except Exception:
+        return False
+
+def _proposal_invite_link(proposal) -> str | None:
+    email = (proposal.contact_email or "").strip() or None
+    now = timezone.now()
+
+    inv = (
+        ProposalAccountInvite.objects
+        .filter(proposal=proposal, company=proposal.company)
+        .filter(used_at__isnull=True)
+        .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+        .order_by("-created_at")
+        .first()
+    )
+
+    if not inv:
+        inv = ProposalAccountInvite.objects.create(
+            proposal=proposal,
+            company=proposal.company,
+            email=email,
+        )
+
+    try:
+        path = reverse("proposal_account_invite", args=[inv.token])
+    except NoReverseMatch:
+        path = f"/invite/{inv.token}/"
+
+    return _abs_url(path)
+
+
+# =========================
 # Reference/Admin catalogs
-# ---------------------------
+# =========================
 
 @admin.register(JobRate)
 class JobRateAdmin(admin.ModelAdmin):
@@ -58,7 +231,6 @@ class JobRateAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
     def has_delete_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
 
-
 @admin.register(BaseSetting)
 class BaseSettingAdmin(admin.ModelAdmin):
     list_display = ("name", "code", "base_rate", "is_active", "sort_order")
@@ -71,7 +243,6 @@ class BaseSettingAdmin(admin.ModelAdmin):
     def has_add_permission(self, request): return is_owner(request.user) or is_admin(request.user)
     def has_change_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
     def has_delete_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
-
 
 @admin.register(Discount)
 class DiscountAdmin(admin.ModelAdmin):
@@ -88,7 +259,6 @@ class DiscountAdmin(admin.ModelAdmin):
     def has_add_permission(self, request): return is_owner(request.user) or is_admin(request.user)
     def has_change_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
     def has_delete_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
-
 
 @admin.register(CatalogItem)
 class CatalogItemAdmin(admin.ModelAdmin):
@@ -107,7 +277,6 @@ class CatalogItemAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
     def has_delete_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
 
-
 @admin.register(CostTier)
 class CostTierAdmin(admin.ModelAdmin):
     list_display  = ("label", "code", "min_total", "max_total", "is_active", "sort_order")
@@ -124,10 +293,27 @@ class CostTierAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
     def has_delete_permission(self, request, obj=None): return is_owner(request.user) or is_admin(request.user)
 
+# =========================
+# DRAFTS
+# =========================
 
-# ---------------------------
-# Drafts
-# ---------------------------
+@admin.action(description="Mark discount verified (Draft)")
+def mark_draft_discount_verified(modeladmin, request, queryset):
+    now = timezone.now()
+    for d in queryset:
+        d.is_discount_verified = True
+        d.verification_checked_at = now
+        d.verification_checked_by = request.user
+        d.recalc_totals(save=True)
+
+@admin.action(description="Revoke discount verification (Draft)")
+def revoke_draft_discount_verified(modeladmin, request, queryset):
+    now = timezone.now()
+    for d in queryset:
+        d.is_discount_verified = False
+        d.verification_checked_at = now
+        d.verification_checked_by = request.user
+        d.recalc_totals(save=True)
 
 class DraftItemInline(admin.TabularInline):
     model = DraftItem
@@ -155,6 +341,28 @@ class DraftNoteInline(admin.TabularInline):
     fields = ("sort_order", "subject", "body_md")
     ordering = ("sort_order", "id")
 
+@admin.action(description="Pre-sign (Owner/Admin only)")
+def action_pre_sign(self, request, queryset):
+    if not (is_owner(request.user) or is_admin(request.user)):
+        self.message_user(request, "You do not have permission to pre-sign.", level=messages.ERROR)
+        return
+    n = 0
+    for d in queryset:
+        if d.approval_status not in (ProposalDraft.ApprovalStatus.APPROVED,):
+            continue
+        d.mark_pre_signed(actor=request.user, payload={"name": request.user.get_full_name() or str(request.user)})
+        n += 1
+    self.message_user(request, f"Pre-signed {n} draft(s).", level=messages.SUCCESS)
+
+@admin.action(description="Revoke pre-sign")
+def action_revoke_pre_sign(self, request, queryset):
+    n = 0
+    for d in queryset:
+        if d.is_pre_signed:
+            d.revoke_pre_sign(actor=request.user, reason="Admin revoke")
+            n += 1
+    self.message_user(request, f"Revoked pre-sign on {n} draft(s).", level=messages.SUCCESS)
+
 @admin.register(ProposalDraft)
 class ProposalDraftAdmin(admin.ModelAdmin):
     inlines = [DraftItemInline, DraftNoteInline]
@@ -166,11 +374,12 @@ class ProposalDraftAdmin(admin.ModelAdmin):
         "estimate_tier", "estimate_low", "estimate_high",
         "estimate_manual",
         "deposit_type", "deposit_value", "deposit_amount",
+        "is_discount_verified", "discount_requires_verification",
         "remaining_due",
         "approval_status", "approved_by", "approved_at",
-        "created_at",
+        "created_at", "is_pre_signed"
     )
-    list_filter = ("company", "deposit_type", "approval_status", "created_at")
+    list_filter = ("discount_requires_verification", "is_discount_verified", "company", "deposit_type", "approval_status", "created_at")
     search_fields = ("title", "company__name", "contact_name", "contact_email")
     ordering = ("-created_at",)
 
@@ -210,9 +419,12 @@ class ProposalDraftAdmin(admin.ModelAdmin):
         "estimate_low", "estimate_high",
         "created_at", "updated_at",
         "submitted_at", "approved_at", "approved_by",
+        "pre_signed_at","pre_signed_by","pre_signature_hash"
     )
 
     actions = [
+        mark_draft_discount_verified,
+        revoke_draft_discount_verified,
         "action_recalc_totals",
         "action_submit_for_approval",
         "action_approve_drafts",
@@ -297,10 +509,9 @@ class ProposalDraftAdmin(admin.ModelAdmin):
             created += 1
         self.message_user(request, f"Created {created} proposal(s) from selected draft(s).", level=messages.SUCCESS)
 
-
-# ---------------------------
-# Proposals
-# ---------------------------
+# =========================
+# PROPOSALS
+# =========================
 
 class ProposalRecipientInline(admin.TabularInline):
     model = ProposalRecipient
@@ -338,19 +549,25 @@ class ProposalViewerInline(admin.TabularInline):
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         field = super().formfield_for_foreignkey(db_field, request, **kwargs)
-        if db_field.name == "user":
+        if db_field.name == "user" and field is not None:
             prop = getattr(request, "_current_proposal_obj", None)
-            if prop and prop.pk:
-                member_user_ids = CompanyMembership.objects.filter(
+            if hasattr(User, "Roles") and hasattr(User.Roles, "CLIENT"):
+                qs = User.objects.filter(role=User.Roles.CLIENT, is_active=True)
+            else:
+                qs = User.objects.filter(is_active=True, is_staff=False, is_superuser=False)
+            if prop and getattr(prop, "pk", None):
+                member_ids = CompanyMembership.objects.filter(
                     company=prop.company, is_active=True
                 ).values_list("user_id", flat=True)
-                field.queryset = field.queryset.filter(pk__in=member_user_ids)
+                qs = qs.filter(pk__in=member_ids)
+
+            field.queryset = qs.order_by("first_name", "last_name", "email")
         return field
 
 class ProposalSectionInline(admin.TabularInline):
     model = ProposalSection
     extra = 0
-    fields = ("sort_order", "subject", "body_md", "is_client_visible")
+    fields = ("sort_order", "subject", "body_md")
     ordering = ("sort_order", "id")
 
 @admin.register(ProposalSummary)
@@ -364,6 +581,86 @@ class ProposalNoteAdmin(admin.ModelAdmin):
     list_filter = ("is_visible_to_client",)
     search_fields = ("subject", "body_md")
     ordering = ("proposal", "sort_order", "pk")
+
+@admin.action(description="Backfill company countersign (append certificate)")
+def action_backfill_countersign(self, request, queryset):
+    user = request.user
+    n_ok, n_err = 0, 0
+    for p in queryset:
+        try:
+            if not p.countersigned_at:
+                p.countersigned_at = timezone.now()
+                p.countersigned_by = user
+                p.countersign_required = False
+                p.save(update_fields=["countersigned_at","countersigned_by","countersign_required","updated_at"])
+
+            fname, data = pdf_stamp.append_certificate(p, user)
+            storage_name = proposal_pdf_upload_to(p, fname)
+            default_storage.save(storage_name, ContentFile(data))
+            p.pdf.name = storage_name
+            p.save(update_fields=["pdf", "updated_at"])
+            n_ok += 1
+        except Exception as e:
+            n_err += 1
+    self.message_user(request, f"Countersigned {n_ok} PDF(s). Errors: {n_err}.")
+
+@admin.action(description="Mark discount verified (Proposal)")
+def mark_proposal_discount_verified(modeladmin, request, queryset):
+    now = timezone.now()
+    for p in queryset:
+        if hasattr(p, "is_discount_verified"):
+            p.is_discount_verified = True
+            if hasattr(p, "verification_checked_at"):
+                p.verification_checked_at = now
+            if hasattr(p, "verification_checked_by"):
+                p.verification_checked_by = request.user
+            p.save(update_fields=[
+                *(["is_discount_verified"] if hasattr(p, "is_discount_verified") else []),
+                *(["verification_checked_at"] if hasattr(p, "verification_checked_at") else []),
+                *(["verification_checked_by"] if hasattr(p, "verification_checked_by") else []),
+            ])
+
+        for ad in p.applied_discounts.all():
+            requires_ver = getattr(ad, "requires_verification", False)
+            pending = getattr(ad, "pending_verification", False)
+            if requires_ver and pending:
+                if ad.kind == "PERCENT":
+                    ad.amount_applied = q2((p.amount_subtotal or 0) * (ad.value or 0) / Decimal("100"))
+                else:
+                    ad.amount_applied = q2(ad.value or 0)
+                if hasattr(ad, "pending_verification"):
+                    ad.pending_verification = False
+                ad.save(update_fields=["amount_applied", *(["pending_verification"] if hasattr(ad, "pending_verification") else [])])
+
+        _recompute_proposal_totals(p)
+
+@admin.action(description="Revoke discount verification (Proposal)")
+def revoke_proposal_discount_verified(modeladmin, request, queryset):
+    now = timezone.now()
+    for p in queryset:
+        if hasattr(p, "is_discount_verified"):
+            p.is_discount_verified = False
+            if hasattr(p, "verification_checked_at"):
+                p.verification_checked_at = now
+            if hasattr(p, "verification_checked_by"):
+                p.verification_checked_by = request.user
+            p.save(update_fields=[
+                *(["is_discount_verified"] if hasattr(p, "is_discount_verified") else []),
+                *(["verification_checked_at"] if hasattr(p, "verification_checked_at") else []),
+                *(["verification_checked_by"] if hasattr(p, "verification_checked_by") else []),
+            ])
+
+        for ad in p.applied_discounts.all():
+            requires_ver = getattr(ad, "requires_verification", False)
+            if requires_ver:
+                ad.amount_applied = Decimal("0.00")
+                if hasattr(ad, "pending_verification"):
+                    ad.pending_verification = True
+                    ad.save(update_fields=["amount_applied", "pending_verification"])
+                else:
+                    ad.save(update_fields=["amount_applied"])
+
+        _recompute_proposal_totals(p)
 
 @admin.register(Proposal)
 class ProposalAdmin(admin.ModelAdmin):
@@ -396,6 +693,7 @@ class ProposalAdmin(admin.ModelAdmin):
         "sign_token", "token_expires_at",
         "sign_link_preview",
         "countersigned_at", "countersigned_by",
+        "assigned_users",
     )
 
     fieldsets = (
@@ -404,24 +702,25 @@ class ProposalAdmin(admin.ModelAdmin):
         ("Totals", {"fields": (("amount_subtotal", "discount_total", "amount_tax", "amount_total"),)}),
         ("Deposit", {"fields": (("deposit_type", "deposit_value", "deposit_amount"), "remaining_due")}),
         ("Signing", {"fields": ("sign_token", "token_expires_at", "sign_link_preview", "sent_at", "viewed_at", "signed_at")}),
-
-        ("Validity", {"fields": ("valid_until",)}),
-        ("Narrative (PDF)", {
-            "fields": (
-                "summary_md",
-                "included_md",
-                "overview_md",
-                "addons_md",
-                "maintenance_md",
-                "payment_terms_md",
-                "legal_terms_md",
-            ),
-            "classes": ("collapse",),
-        }),
+        ("Access", {"fields": ("assigned_users",), "description": "Use the 'Proposal viewers' inline below to add or remove users who can access this proposal.",}),
         ("Timestamps", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
     )
 
-    actions = ["action_generate_link", "action_mark_sent", "action_mark_signed", "action_mark_countersigned", "action_make_deposit_invoice", "action_create_project", "action_recompute_hours",]
+    actions = [
+        mark_proposal_discount_verified,
+        revoke_proposal_discount_verified,
+        "action_generate_link",
+        "action_mark_sent",
+        "action_mark_signed",
+        "action_mark_countersigned",
+        "action_make_deposit_invoice",
+        "action_create_project",
+        "action_recompute_hours",
+        "action_backfill_countersign",
+        "action_email_pdf_only",
+        "action_email_signup_only",
+        "action_email_pdf_and_signup",
+    ]
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         field = super().formfield_for_foreignkey(db_field, request, **kwargs)
@@ -470,18 +769,79 @@ class ProposalAdmin(admin.ModelAdmin):
         return "—"
     pdf_link.short_description = "PDF"
 
+    def assigned_users(self, obj):
+        qs = obj.allowed_viewers.select_related("user")
+        if hasattr(User, "Roles") and hasattr(User.Roles, "CLIENT"):
+            qs = qs.filter(user__role=User.Roles.CLIENT)
+        else:
+            qs = qs.filter(user__is_staff=False, user__is_superuser=False)
+
+        rows = []
+        for v in qs:
+            u = v.user
+            full = (getattr(u, "get_full_name", lambda: "")() or "").strip()
+            label = full or (u.email or str(u))
+            rows.append(f"{label} &lt;{u.email}&gt;")
+        return mark_safe("<br>".join(rows) if rows else "—")
+    assigned_users.short_description = "Assigned users"
+
+    @admin.action(description="Email links → PDF only")
+    def action_email_pdf_only(self, request, queryset):
+        sent = 0
+        skipped = 0
+        for p in queryset:
+            to_email = (p.contact_email or "").strip()
+            if not to_email:
+                skipped += 1
+                continue
+            if _send_links_email(p, to_email=to_email, include_pdf=True, include_signup=False):
+                sent += 1
+        if sent:
+            self.message_user(request, f"Sent PDF link for {sent} proposal(s).", level=messages.SUCCESS)
+        if skipped:
+            self.message_user(request, f"Skipped {skipped} proposal(s) without a contact email.", level=messages.WARNING)
+
+    @admin.action(description="Email links → Account only")
+    def action_email_signup_only(self, request, queryset):
+        sent = 0
+        skipped = 0
+        for p in queryset:
+            to_email = (p.contact_email or "").strip()
+            if not to_email:
+                skipped += 1
+                continue
+            if _send_links_email(p, to_email=to_email, include_pdf=False, include_signup=True):
+                sent += 1
+        if sent:
+            self.message_user(request, f"Sent account link for {sent} proposal(s).", level=messages.SUCCESS)
+        if skipped:
+            self.message_user(request, f"Skipped {skipped} proposal(s) without a contact email.", level=messages.WARNING)
+
+    @admin.action(description="Email links → PDF + Account")
+    def action_email_pdf_and_signup(self, request, queryset):
+        sent = 0
+        skipped = 0
+        for p in queryset:
+            to_email = (p.contact_email or "").strip()
+            if not to_email:
+                skipped += 1
+                continue
+            if _send_links_email(p, to_email=to_email, include_pdf=True, include_signup=True):
+                sent += 1
+        if sent:
+            self.message_user(request, f"Sent PDF + account links for {sent} proposal(s).", level=messages.SUCCESS)
+        if skipped:
+            self.message_user(request, f"Skipped {skipped} proposal(s) without a contact email.", level=messages.WARNING)
+
     @admin.action(description="Recompute Hours (subtotal/total)")
     def action_recompute_hours(self, request, queryset):
         updated = 0
         for p in queryset:
-            # If you created ProposalLineItem.line_hours earlier, this is fast:
             sub = p.line_items.aggregate(s=Sum("line_hours"))["s"]
             if sub is None:
-                # fallback if line_hours isn't present:
                 sub = 0
                 for li in p.line_items.all():
                     sub += (li.hours or 0) * (li.quantity or 0)
-
             sub = Decimal(sub or 0)
             tot = sub + Decimal("8.00")
             p.hours_subtotal = sub
@@ -502,7 +862,7 @@ class ProposalAdmin(admin.ModelAdmin):
     def action_mark_sent(self, request, queryset):
         n = 0
         for p in queryset:
-            p.mark_sent(actor=request.user)
+            p.mark_sent(actor=request.user, messenger_kwargs={"sender_user": request.user})
             n += 1
         self.message_user(request, f"Marked {n} proposal(s) as sent.", level=messages.SUCCESS)
 
@@ -532,7 +892,7 @@ class ProposalAdmin(admin.ModelAdmin):
             if inv is not None:
                 created += 1
         self.message_user(request, f"Created {created} deposit invoice(s).", level=messages.SUCCESS)
-    
+
     @admin.action(description="Create Project (from signed)")
     @transaction.atomic
     def action_create_project(self, request, queryset):

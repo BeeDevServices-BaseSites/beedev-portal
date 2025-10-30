@@ -8,32 +8,32 @@
     </head>
   <h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
   <div class="info">
-    <h3>Your information:</h3>
+    <h3>{{user_obj.first_name}}'s information:</h3>
       <table class="entry">
         <tr>
           <th>First Name:</th>
-          <td>{% if user.first_name %}
-            {{user.first_name}}
+          <td>{% if user_obj.first_name %}
+            {{user_obj.first_name}}
           {% else %}
             TBD
           {% endif %}</td>
         </tr>
         <tr>
           <th>Last Name:</th>
-          <td>{% if user.last_name %}
-            {{user.last_name}}
+          <td>{% if user_obj.last_name %}
+            {{user_obj.last_name}}
           {% else %}
             TBD
           {% endif %}</td>
         </tr>
         <tr>
           <th>Username:</th>
-          <td>{{user.username}}</td>
+          <td>{{user_obj.username}}</td>
         </tr>
         <tr>
           <th>Personal Email:</th>
-          <td>{% if user.email %}
-            {{user.email}}
+          <td>{% if user_obj.email %}
+            {{user_obj.email}}
           {% else %}
             TBD
           {% endif %}</td>
@@ -60,8 +60,8 @@
       <th>Company Email:</th>
       <td>
         {# If your Company model has an `email` field, prefer it #}
-        {% if company and company.email %}
-          {{ company.email }}
+        {% if company and company.primary_email %}
+          {{ company.primary_email }}
         {% elif profile.company_email %}
           {{ profile.company_email }}
         {% else %}

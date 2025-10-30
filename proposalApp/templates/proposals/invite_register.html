@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% load i18n static %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/proposal.css' %}?v={% now 'U' %}">
+
+<div class="container" style="max-width:720px;margin:2rem auto;">
+  <h1 style="margin-bottom:.25rem;">Create your account</h1>
+  <p class="muted" style="margin-top:0;">
+    You’re joining <strong>{{ proposal.company }}</strong> to view and manage
+    the proposal <strong>“{{ proposal.title }}”</strong>.
+  </p>
+
+  {# Invite validity / warning banner (optional) #}
+  {% if invite.is_expired or invite.is_used %}
+    <div class="alert alert-warning" style="margin:1rem 0;">
+      This invite is no longer valid. Please request a fresh invite.
+    </div>
+  {% endif %}
+
+  <form method="post" novalidate style="margin-top:1rem;">
+    {% csrf_token %}
+
+    {# Non-field errors #}
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">
+        {% for e in form.non_field_errors %}
+          <div>{{ e }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="form-row" style="margin:.75rem 0;">
+      <label for="{{ form.full_name.id_for_label }}">Full name</label><br>
+      {{ form.full_name }}
+      {% for e in form.full_name.errors %}
+        <div class="field-error">{{ e }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="form-row" style="margin:.75rem 0;">
+      <label for="{{ form.email.id_for_label }}">Email</label><br>
+      {{ form.email }}
+      {% for e in form.email.errors %}
+        <div class="field-error">{{ e }}</div>
+      {% endfor %}
+      <small class="muted">We’ll use this to send you proposal updates.</small>
+    </div>
+
+    <div class="form-row" style="margin: .75rem 0;">
+      <label for="{{form.username.id_for_label}}">Username</label><br>
+      {{form.username}}
+      {% for e in form.username.errors %}
+        <div class="field-error">{{ e }}</div>
+      {% endfor %}
+      <small class="muted">You will use this to log in.</small>
+    </div>
+
+    <div class="form-row" style="margin:.75rem 0;">
+      <label for="{{ form.password1.id_for_label }}">Password</label><br>
+      {{ form.password1 }}
+      {% for e in form.password1.errors %}
+        <div class="field-error">{{ e }}</div>
+      {% endfor %}
+      <small class="muted">Use at least 8 characters; a mix of letters and numbers is recommended.</small>
+    </div>
+
+    <div class="form-row" style="margin:.75rem 0;">
+      <label for="{{ form.password2.id_for_label }}">Confirm password</label><br>
+      {{ form.password2 }}
+      {% for e in form.password2.errors %}
+        <div class="field-error">{{ e }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="form-row" style="margin:1rem 0;">
+      <label class="checkbox">
+        {{ form.accept_terms }}
+        <span>I agree to the Terms &amp; Conditions.</span>
+      </label>
+      {% for e in form.accept_terms.errors %}
+        <div class="field-error">{{ e }}</div>
+      {% endfor %}
+      {# If you have a terms page, link it here: <a href="{% url 'terms' %}" target="_blank">Terms</a> #}
+    </div>
+
+    <div style="display:flex;gap:.5rem;align-items:center;margin-top:1rem;">
+      <button type="submit" class="btn primary">Create account</button>
+      <a class="btn" href="{% url 'proposal_public:proposal_public_view' proposal.sign_token %}">
+        ← Back to proposal
+      </a>
+    </div>
+
+    <div style="margin-top:1rem;">
+      <small class="muted">
+        Already have an account?
+        <a href="/accounts/login/">Log in</a>
+      </small>
+    </div>
+  </form>
+</div>
+
+<style>
+  .muted { color:#666; }
+  .alert { padding:.75rem 1rem; border-radius:.5rem; }
+  .alert-warning { background:#fff7e6; border:1px solid #f7d694; }
+  .alert-danger { background:#ffecec; border:1px solid #f5b5b5; }
+  .field-error { color:#b00020; font-size:.9rem; margin-top:.25rem; }
+  .btn { display:inline-block; padding:.5rem .9rem; border-radius:.5rem; border:1px solid #ddd; text-decoration:none; }
+  .btn.primary { background:#0d6efd; color:white; border-color:#0d6efd; }
+  .checkbox { display:flex; gap:.5rem; align-items:center; }
+  input[type="text"], input[type="email"], input[type="password"] {
+    width:100%; max-width:480px; padding:.5rem .6rem; border:1px solid #ccc; border-radius:.5rem;
+  }
+  label { font-weight:600; }
+</style>
+{% endblock %}

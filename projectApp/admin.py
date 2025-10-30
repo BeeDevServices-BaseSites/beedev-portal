@@ -1,79 +1,18 @@
 # projectApp/admin.py
-from django.contrib import admin
-from django.db.models import Q
-from django.utils import timezone
+from django.contrib import admin, messages
+from django.db.models import Count, Q
 from django.utils.html import format_html
-from django.contrib.admin import SimpleListFilter
-
-from companyApp.models import CompanyMembership
 from .models import (
-    Project, ProjectMember, ProjectMilestone, ProjectEnvironment,
-    ProjectLink, ProjectUpdate, ProjectUpdateAttachment, ProjectViewer,
-    ProjectTask,
+    Project, ProjectMember, Sprint, ProjectTask, ProjectMilestone,
+    ProjectUpdate, ProjectUpdateAttachment, ProjectEnvironment,
+    ProjectLink, ProjectViewer, ProjectWeekNote,
+    TaskComment, TaskChecklistItem, TaskAttachment, Notification
 )
 
-try:
-    from .models import ProjectWeekNote
-    HAS_WEEK_NOTE = True
-except Exception:
-    HAS_WEEK_NOTE = False
+# ============================================================
+# Inlines
+# ============================================================
 
-
-# -------- permission helpers (match your existing pattern) --------
-def is_owner(u):
-    return u.is_active and (u.is_superuser or u.groups.filter(name="Owner").exists())
-
-def is_admin(u):
-    return u.is_active and u.groups.filter(name="Admin").exists()
-
-def is_hr(u):
-    return u.is_active and u.groups.filter(name="HR").exists()
-
-def is_plain_staff(u):
-    return u.is_active and u.is_staff and not is_owner(u) and not is_admin(u) and not is_hr(u)
-
-
-# =========================
-# Custom list filters
-# =========================
-def monday_of(dt):
-    return dt - timezone.timedelta(days=dt.weekday())
-
-class PlannedWeekFilter(SimpleListFilter):
-    title = "Planned week"
-    parameter_name = "planned_week_start"
-
-    def lookups(self, request, model_admin):
-        return (
-            ("this", "This week"),
-            ("next", "Next week"),
-            ("prev", "Last week"),
-            ("any", "Has a week set"),
-            ("none", "No week set"),
-        )
-
-    def queryset(self, request, queryset):
-        val = self.value()
-        if not val:
-            return queryset
-        today = timezone.localdate()
-        this_mon = monday_of(today)
-        if val == "this":
-            return queryset.filter(planned_week_start=this_mon)
-        if val == "next":
-            return queryset.filter(planned_week_start=this_mon + timezone.timedelta(days=7))
-        if val == "prev":
-            return queryset.filter(planned_week_start=this_mon - timezone.timedelta(days=7))
-        if val == "any":
-            return queryset.exclude(planned_week_start__isnull=True)
-        if val == "none":
-            return queryset.filter(planned_week_start__isnull=True)
-        return queryset
-
-
-# =========================
-# Inlines for Project page
-# =========================
 class ProjectMemberInline(admin.TabularInline):
     model = ProjectMember
     extra = 0
@@ -81,265 +20,310 @@ class ProjectMemberInline(admin.TabularInline):
     fields = ("user", "role", "is_active", "added_at")
     readonly_fields = ("added_at",)
 
-    def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        field = super().formfield_for_foreignkey(db_field, request, **kwargs)
-        if db_field.name == "user":
-            proj = getattr(request, "_current_project_obj", None)
-            if proj and proj.pk:
-                member_ids = CompanyMembership.objects.filter(
-                    company=proj.company, is_active=True
-                ).values_list("user_id", flat=True)
-                field.queryset = field.queryset.filter(Q(is_staff=True) | Q(pk__in=member_ids))
-        return field
-
-class ProjectMilestoneInline(admin.TabularInline):
-    model = ProjectMilestone
-    extra = 0
-    fields = ("sort_order", "name", "description", "state", "due_date", "completed_at", "is_client_visible")
-    readonly_fields = ()
-
 class ProjectEnvironmentInline(admin.TabularInline):
     model = ProjectEnvironment
     extra = 0
     fields = ("kind", "url", "health", "note", "last_checked_at", "last_updated_by")
     autocomplete_fields = ("last_updated_by",)
+    readonly_fields = ("last_checked_at",)
 
 class ProjectLinkInline(admin.TabularInline):
     model = ProjectLink
     extra = 0
     fields = ("label", "url", "section", "visibility", "is_active", "sort_order", "notes")
-    readonly_fields = ()
 
-class ProjectViewerInline(admin.TabularInline):
-    model = ProjectViewer
+class ProjectMilestoneInline(admin.TabularInline):
+    model = ProjectMilestone
     extra = 0
-    autocomplete_fields = ("user",)
-    fields = ("user", "granted_by", "granted_at")
-    readonly_fields = ("granted_at",)
+    fields = ("name", "state", "due_date", "completed_at", "is_client_visible", "sort_order")
+    readonly_fields = ("completed_at",)
 
-    def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        field = super().formfield_for_foreignkey(db_field, request, **kwargs)
-        if db_field.name == "user":
-            proj = getattr(request, "_current_project_obj", None)
-            if proj and proj.pk:
-                member_ids = CompanyMembership.objects.filter(
-                    company=proj.company, is_active=True
-                ).values_list("user_id", flat=True)
-                field.queryset = field.queryset.filter(pk__in=member_ids)
-        return field
-
-    def get_formset(self, request, obj=None, **kwargs):
-        self.request = request
-        return super().get_formset(request, obj, **kwargs)
-
-class ProjectTaskInline(admin.TabularInline):
-    model = ProjectTask
+class SprintInline(admin.TabularInline):
+    model = Sprint
     extra = 0
-    fields = (
-        "title", "status", "priority",
-        "planned_week_start", "due_date",
-        "percent_complete", "sort_order",
-        "is_client_visible", "show_priority_to_client",
-        "assignees",
-        "created_by", "created_at", "updated_at",
-    )
-    readonly_fields = ("created_at", "updated_at")
-    autocomplete_fields = ("assignees", "created_by")
-    show_change_link = True
-    ordering = ("planned_week_start", "priority", "sort_order", "due_date")
+    fields = ("name", "start_date", "end_date", "goal", "is_active")
 
-    def has_add_permission(self, request, obj):
-        return is_owner(request.user) or is_admin(request.user) or is_plain_staff(request.user)
+class TaskChecklistInline(admin.TabularInline):
+    model = TaskChecklistItem
+    extra = 0
+    fields = ("text", "done", "sort_order", "created_by", "created_at")
+    autocomplete_fields = ("created_by",)
+    readonly_fields = ("created_at",)
 
-    def has_change_permission(self, request, obj=None):
-        return is_owner(request.user) or is_admin(request.user) or is_plain_staff(request.user)
+class TaskAttachmentInline(admin.TabularInline):
+    model = TaskAttachment
+    extra = 0
+    fields = ("file", "original_name", "uploaded_by", "uploaded_at")
+    autocomplete_fields = ("uploaded_by",)
+    readonly_fields = ("uploaded_at",)
 
-    def has_delete_permission(self, request, obj=None):
-        return is_owner(request.user) or is_admin(request.user)
+class TaskCommentInline(admin.TabularInline):
+    model = TaskComment
+    fk_name = "task"
+    extra = 0
+    fields = ("author", "parent", "is_internal", "body", "created_at", "edited_at")
+    autocomplete_fields = ("author", "parent")
+    readonly_fields = ("created_at", "edited_at")
 
-
-# =========================
-# Project admin
-# =========================
-@admin.register(Project)
-class ProjectAdmin(admin.ModelAdmin):
-    inlines = [
-        ProjectMemberInline,
-        ProjectMilestoneInline,
-        ProjectEnvironmentInline,
-        ProjectLinkInline,
-        ProjectTaskInline,
-        ProjectViewerInline,
-    ]
-
-    list_display = (
-        "name", "company", "status", "stage",
-        "priority", "show_priority_to_client",
-        "client_can_view_status", "client_can_view_links", "client_can_view_description",
-        "percent_complete", "start_date", "target_launch_date", "actual_launch_date",
-        "updated_at",
-    )
-    list_filter = (
-        "company", "status", "stage",
-        "is_active",
-        "priority", "show_priority_to_client",
-        "client_can_view_status", "client_can_view_links", "client_can_view_description",
-    )
-    search_fields = ("name", "company__name", "description", "scope_summary", "tags")
-    ordering = ("company__name", "name")
-    prepopulated_fields = {"slug": ("name",)}
-
-    fieldsets = (
-        ("Identity", {"fields": ("company", "proposal", "name", "slug", "status", "stage", "is_active")}),
-        ("Priority", {"fields": ("priority", "show_priority_to_client")}),
-        ("Client Visibility", {"fields": ("client_can_view_status", "client_can_view_links", "client_can_view_description")}),
-        ("Summary", {"fields": ("description", "scope_summary", "tags")}),
-        ("Progress & Dates", {"fields": ("percent_complete", "start_date", "target_launch_date", "actual_launch_date")}),
-        ("Ownership", {"fields": ("manager",)}),
-        ("Audit", {"fields": ("created_by", "created_at", "updated_at")}),
-    )
-    readonly_fields = ("created_at", "updated_at")
-    autocomplete_fields = ("company", "proposal", "manager", "created_by")
-
-    def get_form(self, request, obj=None, **kwargs):
-        request._current_project_obj = obj
-        return super().get_form(request, obj, **kwargs)
-
-    def has_module_permission(self, request):
-        if is_hr(request.user) or not request.user.is_staff:
-            return False
-        return True
-
-    def has_view_permission(self, request, obj=None):
-        return self.has_module_permission(request)
-
-    def has_add_permission(self, request):
-        return is_owner(request.user) or is_admin(request.user)
-
-    def has_change_permission(self, request, obj=None):
-        return is_owner(request.user) or is_admin(request.user) or is_plain_staff(request.user)
-
-    def has_delete_permission(self, request, obj=None):
-        return is_owner(request.user) or is_admin(request.user)
-
-    def save_model(self, request, obj, form, change):
-        if not change and not obj.created_by_id:
-            obj.created_by = request.user
-        super().save_model(request, obj, form, change)
-
-
-# =========================
-# ProjectTask admin
-# =========================
-@admin.register(ProjectTask)
-class ProjectTaskAdmin(admin.ModelAdmin):
-    list_display = (
-        "project", "title", "status", "priority",
-        "planned_week_start", "due_date",
-        "is_client_visible", "show_priority_to_client",
-        "percent_complete",
-        "created_by", "updated_at",
-    )
-    list_filter = (
-        "status",
-        PlannedWeekFilter,
-        "is_client_visible",
-        "show_priority_to_client",
-        "project__company",
-    )
-    search_fields = ("title", "description", "project__name", "project__slug", "project__company__name")
-    autocomplete_fields = ("project", "assignees", "created_by")
-    readonly_fields = ("created_at", "updated_at")
-    ordering = ("project", "planned_week_start", "priority", "sort_order", "due_date")
-
-    fieldsets = (
-        ("Identity", {"fields": ("project", "title", "description")}),
-        ("Status & Priority", {"fields": ("status", "priority", "percent_complete", "sort_order")}),
-        ("Scheduling", {"fields": ("planned_week_start", "due_date")}),
-        ("Assignment", {"fields": ("assignees",)}),
-        ("Client Visibility", {"fields": ("is_client_visible", "show_priority_to_client")}),
-        ("Audit", {"fields": ("created_by", "created_at", "updated_at")}),
-    )
-
-    def has_module_permission(self, request):
-        return request.user.is_staff
-
-    def has_add_permission(self, request):
-        return is_owner(request.user) or is_admin(request.user) or is_plain_staff(request.user)
-
-    def has_change_permission(self, request, obj=None):
-        return is_owner(request.user) or is_admin(request.user) or is_plain_staff(request.user)
-
-    def has_delete_permission(self, request, obj=None):
-        return is_owner(request.user) or is_admin(request.user)
-
-
-# =========================
-# ProjectUpdate admin (with attachments)
-# =========================
-class ProjectUpdateAttachmentInline(admin.TabularInline):
+class UpdateAttachmentInline(admin.TabularInline):
     model = ProjectUpdateAttachment
     extra = 0
     fields = ("file", "original_name", "uploaded_at")
     readonly_fields = ("uploaded_at",)
 
+# ============================================================
+# Actions
+# ============================================================
+
+def _set_task_status(modeladmin, request, queryset, status_value, label):
+    updated = queryset.update(status=status_value)
+    messages.success(request, f"{updated} task(s) moved to {label}.")
+
+@admin.action(description="Set status → To Do")
+def action_tasks_todo(modeladmin, request, queryset):
+    from .models import ProjectTask
+    _set_task_status(modeladmin, request, queryset, ProjectTask.Status.TODO, "To Do")
+
+@admin.action(description="Set status → In Progress")
+def action_tasks_in_progress(modeladmin, request, queryset):
+    from .models import ProjectTask
+    _set_task_status(modeladmin, request, queryset, ProjectTask.Status.IN_PROGRESS, "In Progress")
+
+@admin.action(description="Set status → Blocked")
+def action_tasks_blocked(modeladmin, request, queryset):
+    from .models import ProjectTask
+    _set_task_status(modeladmin, request, queryset, ProjectTask.Status.BLOCKED, "Blocked")
+
+@admin.action(description="Set status → Done")
+def action_tasks_done(modeladmin, request, queryset):
+    from .models import ProjectTask
+    _set_task_status(modeladmin, request, queryset, ProjectTask.Status.DONE, "Done")
+
+@admin.action(description="Set status → Canceled")
+def action_tasks_canceled(modeladmin, request, queryset):
+    from .models import ProjectTask
+    _set_task_status(modeladmin, request, queryset, ProjectTask.Status.CANCELED, "Canceled")
+
+@admin.action(description="Clear sprint (move to Backlog)")
+def action_tasks_clear_sprint(modeladmin, request, queryset):
+    updated = queryset.update(sprint=None)
+    messages.success(request, f"{updated} task(s) moved to Backlog.")
+
+@admin.action(description="Mark notifications as read")
+def action_notifications_mark_read(modeladmin, request, queryset):
+    updated = queryset.update(is_read=True)
+    messages.success(request, f"{updated} notification(s) marked as read.")
+
+# ============================================================
+# Admin registrations
+# ============================================================
+
+@admin.register(Project)
+class ProjectAdmin(admin.ModelAdmin):
+    list_display = (
+        "company", "name", "status", "stage", "manager",
+        "percent_complete", "priority", "is_active", "link_count", "env_count", "task_summary",
+        "created_at",
+    )
+    list_filter = ("status", "stage", "is_active", "priority", "client_can_view_status", "client_can_view_links")
+    search_fields = ("name", "slug", "description", "scope_summary", "company__name")
+    autocomplete_fields = ("company", "proposal", "manager", "created_by")
+    readonly_fields = ("created_at", "updated_at", "slug")
+    inlines = [ProjectMemberInline, ProjectEnvironmentInline, ProjectLinkInline, ProjectMilestoneInline, SprintInline]
+    ordering = ("company__name", "name")
+
+    fieldsets = (
+        ("Basics", {
+            "fields": ("company", "proposal", "name", "slug", "description", "scope_summary", "tags")
+        }),
+        ("Status", {
+            "fields": ("status", "stage", "manager", "priority", "show_priority_to_client", "is_active")
+        }),
+        ("Dates", {
+            "fields": ("start_date", "target_launch_date", "actual_launch_date")
+        }),
+        ("Client Visibility", {
+            "fields": ("client_can_view_status", "client_can_view_links", "client_can_view_description")
+        }),
+        ("Progress", {
+            "fields": ("percent_complete",)
+        }),
+        ("Meta", {
+            "fields": ("created_by", "created_at", "updated_at")
+        }),
+    )
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # annotate for quick counts and status summary
+        qs = qs.annotate(
+            link_cnt=Count("links", filter=Q(links__is_active=True)),
+            env_cnt=Count("environments"),
+            todo_cnt=Count("tasks", filter=Q(tasks__status=ProjectTask.Status.TODO)),
+            inprog_cnt=Count("tasks", filter=Q(tasks__status=ProjectTask.Status.IN_PROGRESS)),
+            blocked_cnt=Count("tasks", filter=Q(tasks__status=ProjectTask.Status.BLOCKED)),
+            done_cnt=Count("tasks", filter=Q(tasks__status=ProjectTask.Status.DONE)),
+        )
+        return qs
+
+    def link_count(self, obj):
+        return obj.link_cnt
+    link_count.short_description = "Links"
+
+    def env_count(self, obj):
+        return obj.env_cnt
+    env_count.short_description = "Envs"
+
+    def task_summary(self, obj):
+        return f"📝 {obj.todo_cnt} · 🔧 {obj.inprog_cnt} · ⛔ {obj.blocked_cnt} · ✅ {obj.done_cnt}"
+    task_summary.short_description = "Tasks"
+
+@admin.register(ProjectMember)
+class ProjectMemberAdmin(admin.ModelAdmin):
+    list_display = ("project", "user", "role", "is_active", "added_at")
+    list_filter = ("role", "is_active")
+    search_fields = ("project__name", "project__slug", "user__username", "user__preferred_name")
+    autocomplete_fields = ("project", "user")
+    readonly_fields = ("added_at",)
+
+@admin.register(Sprint)
+class SprintAdmin(admin.ModelAdmin):
+    list_display = ("project", "name", "start_date", "end_date", "goal", "is_active")
+    list_filter = ("is_active", "start_date", "end_date")
+    search_fields = ("name", "goal", "project__name", "project__slug")
+    autocomplete_fields = ("project",)
+
+@admin.register(ProjectTask)
+class ProjectTaskAdmin(admin.ModelAdmin):
+    list_display = (
+        "project", "title", "status", "priority", "sprint",
+        "due_date", "planned_week_start", "percent_complete", "estimated_hours",
+        "assignees_list", "created_at"
+    )
+    list_filter = (
+        "project", "status", "priority", "sprint", "is_client_visible",
+        ("due_date", admin.DateFieldListFilter), ("planned_week_start", admin.DateFieldListFilter)
+    )
+    search_fields = ("title", "description", "project__name", "project__slug")
+    autocomplete_fields = ("project", "assignees", "sprint", "created_by")
+    inlines = [TaskChecklistInline, TaskAttachmentInline, TaskCommentInline]
+    readonly_fields = ("created_at", "updated_at")
+    actions = [
+        action_tasks_todo, action_tasks_in_progress, action_tasks_blocked,
+        action_tasks_done, action_tasks_canceled, action_tasks_clear_sprint
+    ]
+    ordering = ("project", "priority", "due_date", "pk")
+
+    fieldsets = (
+        ("Basics", {
+            "fields": ("project", "title", "description")
+        }),
+        ("Planning", {
+            "fields": ("priority", "status", "sprint", "story_points", "blocked_reason")
+        }),
+        ("Schedule", {
+            "fields": ("due_date", "planned_week_start")
+        }),
+        ("Assignment", {
+            "fields": ("assignees",)
+        }),
+        ("Tracking", {
+            "fields": ("estimated_hours", "percent_complete", "sort_order")
+        }),
+        ("Client Visibility", {
+            "fields": ("is_client_visible", "show_priority_to_client")
+        }),
+        ("Meta", {
+            "fields": ("created_by", "created_at", "updated_at")
+        }),
+    )
+
+    def assignees_list(self, obj):
+        names = [getattr(u, "preferred_name", None) or u.get_username() for u in obj.assignees.all()]
+        return ", ".join(names) if names else "—"
+    assignees_list.short_description = "Assignees"
+
+@admin.register(ProjectMilestone)
+class ProjectMilestoneAdmin(admin.ModelAdmin):
+    list_display = ("project", "name", "state", "due_date", "completed_at", "is_client_visible", "sort_order")
+    list_filter = ("state", "is_client_visible", ("due_date", admin.DateFieldListFilter))
+    search_fields = ("name", "project__name", "project__slug")
+    autocomplete_fields = ("project",)
+
 @admin.register(ProjectUpdate)
 class ProjectUpdateAdmin(admin.ModelAdmin):
-    inlines = [ProjectUpdateAttachmentInline]
-
-    list_display = ("project", "title", "visibility", "percent_complete_snapshot", "pinned", "posted_at")
-    list_filter  = ("visibility", "pinned", "project__company")
-    search_fields = ("project__name", "project__company__name", "title", "body")
+    list_display = ("project", "title", "visibility", "percent_complete_snapshot", "pinned", "posted_at", "created_by")
+    list_filter = ("visibility", "pinned", ("posted_at", admin.DateFieldListFilter))
+    search_fields = ("title", "body", "project__name", "project__slug")
     autocomplete_fields = ("project", "created_by")
-
-    fields = (
-        "project", "title", "body", "visibility",
-        "percent_complete_snapshot", "pinned",
-        "created_by", "posted_at",
-    )
+    inlines = [UpdateAttachmentInline]
     readonly_fields = ("posted_at",)
 
-    def has_module_permission(self, request):
-        return request.user.is_staff
+@admin.register(ProjectWeekNote)
+class ProjectWeekNoteAdmin(admin.ModelAdmin):
+    list_display = ("project", "week_start", "visibility", "created_by", "created_at")
+    list_filter = ("visibility", ("week_start", admin.DateFieldListFilter))
+    search_fields = ("project__name", "project__slug", "body")
+    autocomplete_fields = ("project", "created_by")
+    readonly_fields = ("created_at",)
 
-    def has_add_permission(self, request):
-        return is_owner(request.user) or is_admin(request.user)
+@admin.register(ProjectEnvironment)
+class ProjectEnvironmentAdmin(admin.ModelAdmin):
+    list_display = ("project", "kind", "url_link", "health", "note", "last_checked_at", "last_updated_by")
+    list_filter = ("kind", "health")
+    search_fields = ("project__name", "project__slug", "url", "note")
+    autocomplete_fields = ("project", "last_updated_by")
 
-    def has_change_permission(self, request, obj=None):
-        return is_owner(request.user) or is_admin(request.user)
+    def url_link(self, obj):
+        if obj.url:
+            return format_html('<a href="{}" target="_blank">Open</a>', obj.url)
+        return "—"
+    url_link.short_description = "URL"
 
-    def has_delete_permission(self, request, obj=None):
-        return is_owner(request.user) or is_admin(request.user)
+@admin.register(ProjectLink)
+class ProjectLinkAdmin(admin.ModelAdmin):
+    list_display = ("project", "label", "section", "visibility", "is_active", "sort_order")
+    list_filter = ("visibility", "section", "is_active")
+    search_fields = ("label", "url", "notes", "project__name", "project__slug")
+    autocomplete_fields = ("project",)
 
+@admin.register(ProjectViewer)
+class ProjectViewerAdmin(admin.ModelAdmin):
+    list_display = ("project", "user", "granted_by", "granted_at")
+    list_filter = (("granted_at", admin.DateFieldListFilter),)
+    search_fields = ("project__name", "project__slug", "user__username", "user__preferred_name")
+    autocomplete_fields = ("project", "user", "granted_by")
+    readonly_fields = ("granted_at",)
 
-# =========================
-# Optional: ProjectWeekNote admin
-# =========================
-if HAS_WEEK_NOTE:
-    @admin.register(ProjectWeekNote)
-    class ProjectWeekNoteAdmin(admin.ModelAdmin):
-        list_display = ("project", "week_start", "visibility", "created_by", "created_at")
-        list_filter  = ("visibility", "project__company")
-        search_fields = ("project__name", "project__slug", "body")
-        autocomplete_fields = ("project", "created_by")
-        readonly_fields = ("created_at",)
-        ordering = ("-week_start", "project")
+@admin.register(TaskComment)
+class TaskCommentAdmin(admin.ModelAdmin):
+    list_display = ("task", "author", "is_internal", "created_at")
+    list_filter = ("is_internal", ("created_at", admin.DateFieldListFilter))
+    search_fields = ("body", "task__title", "task__project__name", "author__username", "author__preferred_name")
+    autocomplete_fields = ("task", "author", "parent")
+    readonly_fields = ("created_at", "edited_at")
 
-        fieldsets = (
-            ("Identity", {"fields": ("project", "week_start")}),
-            ("Visibility", {"fields": ("visibility",)}),
-            ("Content", {"fields": ("body",)}),
-            ("Audit", {"fields": ("created_by", "created_at")}),
-        )
+@admin.register(TaskChecklistItem)
+class TaskChecklistItemAdmin(admin.ModelAdmin):
+    list_display = ("task", "text", "done", "sort_order", "created_by", "created_at")
+    list_filter = ("done",)
+    search_fields = ("text", "task__title", "task__project__name")
+    autocomplete_fields = ("task", "created_by")
+    readonly_fields = ("created_at",)
 
-        def has_module_permission(self, request):
-            return request.user.is_staff
+@admin.register(TaskAttachment)
+class TaskAttachmentAdmin(admin.ModelAdmin):
+    list_display = ("task", "original_name", "uploaded_by", "uploaded_at")
+    list_filter = (("uploaded_at", admin.DateFieldListFilter),)
+    search_fields = ("original_name", "task__title", "task__project__name")
+    autocomplete_fields = ("task", "uploaded_by")
+    readonly_fields = ("uploaded_at",)
 
-        def has_add_permission(self, request):
-            return is_owner(request.user) or is_admin(request.user) or is_plain_staff(request.user)
-
-        def has_change_permission(self, request, obj=None):
-            return is_owner(request.user) or is_admin(request.user) or is_plain_staff(request.user)
-
-        def has_delete_permission(self, request, obj=None):
-            return is_owner(request.user) or is_admin(request.user)
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ("recipient", "kind", "task", "is_read", "created_at", "message")
+    list_filter = ("kind", "is_read", ("created_at", admin.DateFieldListFilter))
+    search_fields = ("message", "recipient__username", "recipient__preferred_name", "task__title", "task__project__name")
+    autocomplete_fields = ("recipient", "task")
+    actions = [action_notifications_mark_read]
+    readonly_fields = ("created_at",)

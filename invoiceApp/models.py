@@ -8,6 +8,7 @@ from django.contrib.auth import get_user_model
 from django.core.validators import URLValidator
 from django.core.validators import FileExtensionValidator
 from django.core.exceptions import ValidationError
+from django.db import transaction
 
 # ---------- Validators / helpers ----------
 PDF_VALIDATOR = FileExtensionValidator(["pdf"])
@@ -35,10 +36,21 @@ class Invoice(models.Model):
         PARTIAL  = "PARTIAL",  "Partially Paid"
         PAID     = "PAID",     "Paid"
         VOID     = "VOID",     "Void"
+    
+    class Kind(models.TextChoices):
+        ONE_OFF   = "ONE_OFF",   "One-off"
+        DEPOSIT   = "DEPOSIT",   "Deposit"
+        BALANCE   = "BALANCE",   "Balance"
+        RECURRING = "RECURRING", "Recurring"
+
 
     company         = models.ForeignKey("companyApp.Company", on_delete=models.CASCADE, related_name="invoices")
     proposal        = models.ForeignKey("proposalApp.Proposal", null=True, blank=True, on_delete=models.SET_NULL, related_name="invoices")
 
+    kind           = models.CharField(max_length=12, choices=Kind.choices, default=Kind.ONE_OFF)
+    recurring_code = models.SlugField(max_length=40, blank=True, help_text="e.g. hosting, domain, maintenance")
+    period_start   = models.DateField(null=True, blank=True, help_text="For recurring: service period start")
+    period_end     = models.DateField(null=True, blank=True, help_text="For recurring: service period end")
 
     customer_user   = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="customer_invoices")
     customer_contact = models.ForeignKey("companyApp.CompanyContact", null=True, blank=True, on_delete=models.SET_NULL, related_name="invoices")
@@ -96,6 +108,34 @@ class Invoice(models.Model):
     @property
     def balance_due(self) -> Decimal:
         return (self.total or Decimal("0.00")) - (self.amount_paid or Decimal("0.00"))
+    
+    def can_user_view(self, user) -> bool:
+        if not user or not user.is_authenticated:
+            return False
+        if getattr(user, "is_staff", False) or getattr(user, "is_superuser", False):
+            return True
+        if self.customer_user_id and user.id == self.customer_user_id:
+            return True
+        if self.allowed_viewers.filter(user=user).exists():
+            return True
+        return False
+    
+    def clean(self):
+        super().clean()
+        # Enforce: at most 1 DEPOSIT and 1 BALANCE per proposal
+        if self.proposal_id and self.kind in {self.Kind.DEPOSIT, self.Kind.BALANCE}:
+            clash = (Invoice.objects
+                     .filter(proposal_id=self.proposal_id, kind=self.kind)
+                     .exclude(pk=self.pk)
+                     .exists())
+            if clash:
+                raise ValidationError({"kind": f"A {self.kind} invoice already exists for this proposal."})
+
+        # Simple sanity for recurring period
+        if self.kind == self.Kind.RECURRING and self.period_start and self.period_end:
+            if self.period_end < self.period_start:
+                raise ValidationError({"period_end": "period_end must be on/after period_start."})
+
 
     def recalc_totals(self, *, save=True):
         sub = sum((li.subtotal or Decimal("0.00")) for li in self.line_items.all())
@@ -167,6 +207,108 @@ class Invoice(models.Model):
             )
         inv.recalc_totals(save=True)
         return inv
+    
+    @classmethod
+    @transaction.atomic
+    def ensure_deposit_from_proposal(cls, proposal, *, created_by=None, due_date=None, customer_user=None):
+        """Return existing DEPOSIT invoice or create one from the proposal's deposit."""
+        existing = cls.objects.filter(proposal=proposal, kind=cls.Kind.DEPOSIT).first()
+        if existing:
+            return existing
+
+        # Use proposal.deposit_amount; fall back to total if needed
+        deposit = proposal.deposit_amount or Decimal("0.00")
+        total   = proposal.amount_total or Decimal("0.00")
+        amount  = deposit if deposit > Decimal("0.00") else total
+
+        if amount <= Decimal("0.00"):
+            raise ValidationError("Proposal has no positive deposit/total amount to invoice.")
+
+        inv = cls.objects.create(
+            company=proposal.company,
+            proposal=proposal,
+            customer_user=customer_user or getattr(getattr(proposal, "contact", None), "user", None),
+            customer_contact=getattr(proposal, "contact", None),
+            currency=proposal.currency,
+            due_date=due_date,
+            minimum_due=amount,                           # deposit is the minimum due
+            tax_total=proposal.amount_tax or Decimal("0.00"),
+            created_by=created_by,
+            status=cls.Status.SENT,
+            kind=cls.Kind.DEPOSIT,
+        )
+
+        from .models import InvoiceLineItem, InvoiceAppliedDiscount  # local import to avoid circulars
+
+        # Single deposit line item (not copying full proposal lines)
+        InvoiceLineItem.objects.create(
+            invoice=inv,
+            sort_order=0,
+            name=f"Deposit for proposal '{proposal.title}'",
+            description="Deposit invoice",
+            quantity=Decimal("1.00"),
+            unit_price=amount,
+            subtotal=amount,
+        )
+
+        # Carry discounts if you want them reflected on the deposit doc
+        for ad in proposal.applied_discounts.all().order_by("sort_order", "id"):
+            InvoiceAppliedDiscount.objects.create(
+                invoice=inv,
+                discount_code=ad.discount_code,
+                name=ad.name,
+                kind=ad.kind,
+                value=ad.value,
+                amount_applied=ad.amount_applied,
+                sort_order=ad.sort_order,
+            )
+
+        inv.recalc_totals(save=True)
+        return inv
+
+    @classmethod
+    @transaction.atomic
+    def ensure_balance_from_proposal(cls, proposal, *, created_by=None, due_date=None, customer_user=None):
+        """Return existing BALANCE invoice or create one for remaining balance."""
+        existing = cls.objects.filter(proposal=proposal, kind=cls.Kind.BALANCE).first()
+        if existing:
+            return existing
+
+        total   = proposal.amount_total or Decimal("0.00")
+        deposit = proposal.deposit_amount or Decimal("0.00")
+        remaining = (total - deposit)
+
+        if remaining <= Decimal("0.00"):
+            raise ValidationError("No remaining balance to invoice.")
+
+        inv = cls.objects.create(
+            company=proposal.company,
+            proposal=proposal,
+            customer_user=customer_user or getattr(getattr(proposal, "contact", None), "user", None),
+            customer_contact=getattr(proposal, "contact", None),
+            currency=proposal.currency,
+            due_date=due_date,
+            minimum_due=remaining,
+            tax_total=Decimal("0.00"),  # adjust if you tax the final differently
+            created_by=created_by,
+            status=cls.Status.SENT,
+            kind=cls.Kind.BALANCE,
+        )
+
+        from .models import InvoiceLineItem
+        InvoiceLineItem.objects.create(
+            invoice=inv,
+            sort_order=0,
+            name=f"Balance for proposal '{proposal.title}'",
+            description="Final balance after deposit",
+            quantity=Decimal("1.00"),
+            unit_price=remaining,
+            subtotal=remaining,
+        )
+
+        inv.recalc_totals(save=True)
+        return inv
+
 
 # =======================================================================
 #                          INVOICE LINE ITEMS

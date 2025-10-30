@@ -77,6 +77,57 @@ body main .dash {
   flex-direction: row;
   justify-content: center;
   align-items: center;
+  width: 80%;
+  align-items: flex-start;
+}
+body main .dash .proposals,
+body main .dash .projects {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 50%;
+}
+body main .dash .proposals .detail,
+body main .dash .projects .detail {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  align-items: flex-start;
+  margin: 0 0 1em 0;
+  width: 75%;
+}
+body main .dash .proposals .detail h3,
+body main .dash .projects .detail h3 {
+  text-align: center;
+  background-color: var(--green);
+  color: var(--white);
+  width: 100%;
+  padding: 1em;
+  margin-bottom: 0.5em;
+  border: 4px groove transparent;
+  border-image: var(--yb_border);
+  border-image-slice: 1;
+  font-size: 1.4em;
+}
+body main .dash .proposals .detail .entry,
+body main .dash .projects .detail .entry {
+  width: 100%;
+  margin: 1em 0;
+}
+body main .dash .proposals .detail .entry th,
+body main .dash .projects .detail .entry th {
+  background-color: var(--alt_green);
+  color: var(--black);
+  font-size: 1.2em;
+  margin: 1em 0;
+}
+body main .dash .proposals .detail .entry td,
+body main .dash .projects .detail .entry td {
+  width: 50%;
+  text-align: left;
+  padding-left: 0.5em;
 }
 body main .list_menu {
   display: flex;

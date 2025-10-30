@@ -3,6 +3,9 @@ from django import forms
 from django.forms import formset_factory, inlineformset_factory, BaseInlineFormSet
 from companyApp.models import Company
 from .models import ProposalDraft, Discount, DraftNote, DraftItem
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 class BaseDraftNoteFS(BaseInlineFormSet):
     def clean(self):
@@ -15,9 +18,40 @@ class BaseDraftNoteFS(BaseInlineFormSet):
             if not subj and not body:
                 form.cleaned_data["DELETE"] = True
 
-# -------------------------
-# Draft header form (create & edit)
-# -------------------------
+class SignProposalForm(forms.Form):
+    full_name = forms.CharField(
+        max_length=160,
+        required=True,
+        label="Your full name",
+        widget=forms.TextInput(attrs={"placeholder": "Jane Doe"})
+    )
+    contact_email = forms.EmailField(
+        required=False,
+        label="Email for the signed copy",
+        widget=forms.EmailInput(attrs={"placeholder": "you@example.com"})
+    )
+    agree_e_records = forms.BooleanField(
+        required=True,
+        label="I agree to receive and sign this proposal electronically.",
+        widget=forms.CheckboxInput(attrs={"class": "checkbox"})
+    )
+    agree_intent = forms.BooleanField(
+        required=True,
+        label="I intend to sign this proposal.",
+        widget=forms.CheckboxInput(attrs={"class": "checkbox"})
+    )
+    def __init__(self, *args, **kwargs):
+        self.proposal = kwargs.pop("proposal", None)
+        super().__init__(*args, **kwargs)
+        if self.proposal and not self.initial.get("contact_email"):
+            self.initial["contact_email"] = getattr(self.proposal, "contact_email", "")
+
+    def clean_full_name(self):
+        name = (self.cleaned_data.get("full_name") or "").strip()
+        if len(name) < 2:
+            raise forms.ValidationError("Please enter your full name.")
+        return name
+
 class DraftForm(forms.ModelForm):
     class Meta:
         model = ProposalDraft
@@ -71,6 +105,26 @@ class DraftForm(forms.ModelForm):
 
 NewDraftForm = DraftForm
 
+def client_queryset():
+    role_val = None
+    try:
+        role_val = getattr(User.Roles, "CLIENT", None) or getattr(User.Roles, "CLIENT".upper(), None)
+    except Exception:
+        pass
+    filters = {"is_staff": False}
+    if role_val:
+        filters["role"] = role_val
+    else:
+        # Fallback if your custom user doesn't expose Roles enum
+        filters["role"] = "CLIENT"
+    return User.objects.filter(**filters).order_by("first_name", "last_name", "email")
+
+class AddViewerForm(forms.Form):
+    client = forms.ModelChoiceField(
+        queryset=client_queryset(),
+        label="Client",
+        help_text="Give this client access to view this proposal."
+    )
 
 # --------------------------------
 # Notes (create flow: plain FormSet)

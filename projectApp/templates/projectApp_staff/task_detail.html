@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% load page_title user_extras %}
+{% block content %}
+<head>
+    <link rel="stylesheet" href="{% static 'css/project.css'%}?v={% now 'U' %}">
+  </head>
+
+<h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
+<div class="mini_menu">
+  <h2><strong>Project:</strong> <a href="{% url 'projects_staff:project_board' task.project.slug %}">{{ task.project.name }}</a></h2>
+  <h2><strong>Sprint:</strong> {{ task.sprint.name|default:"Backlog" }}</h2>
+  <h2>
+    <strong>Project Manager:</strong> 
+    {% if task.project.manager %}
+      {{ task.project.manager.preferred_name|default:task.project.manager.username }}
+    {% else %}
+      -
+    {% endif %}
+  </h2>
+</div>
+<div class="detail">
+  <h3>Task Details</h3>
+  <table class="entry alt_entry">
+    <tr>
+      <th>Status</th>
+      <th>Priority</th>
+      <th>Due Date</th>
+      <th>Last update</th>
+    </tr>
+    <tr>
+      <td>{{ task.get_status_display }}</td>
+      <td>{{ task.priority }}</td>
+      <td>{{ task.due_date|default:"—" }}</td>
+      <td>{{ task.updated_at|date:"Y-m-d H:i" }}</td>
+    </tr>
+  </table>
+  <table class="entry alt_entry">
+    <tr>
+      <th>Description</th>
+    </tr>
+    {% if task.description %}
+      <tr>
+        <td>{{ task.description }}</td>
+      </tr>
+    {% else %}
+      <tr>
+        <td>NONE</td>
+      </tr>
+    {% endif %}
+  </table>
+</div>
+<div class="detail">
+  <h3>Assignees</h3>
+  <table class="entry alt_entry">
+    <tr>
+      <th>Name</th>
+    </tr>
+    {% if task.assignees.all %}
+      {% for a in task.assignees.all %}
+        <tr>
+          <td>{{ a.preferred_name|default:a.username }}</td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td> No one assigned yet </td>
+        </tr>
+    {% endfor %}
+  {% else %}
+      <tr>
+        <td> No one assigned yet </td>
+      </tr>
+  {% endif %}
+  </table>
+</div>
+<div class="detail">
+  <h3>Checklist</h3>
+  <form class="span" method="post" action="{% url 'projects_staff:task_add_checklist_item' task.pk %}">
+      {% csrf_token %}
+      {{ checklist_form.text }}
+      <button class="button is-small" type="submit">Add new Checklist item</button>
+    </form>
+    <table class="entry alt_entry">
+      <tr>
+        <th></th>
+        <th>Name</th>
+        <th>Created/Completed By</th>
+        <th>Created/Completed Date</th>
+      </tr>
+      {% for i in task.checklist.all %}
+        <tr>
+          <td>
+            <form method="post" action="{% url 'projects_staff:task_toggle_checklist_item' i.pk %}" style="display:inline;">
+              {% csrf_token %}
+              <button class="button is-small" type="submit">{% if i.done %}✅{% else %}⬜{% endif %}</button>
+            </form>
+          </td>
+          <td>
+            <span style="{% if i.done %}text-decoration:line-through;color:#666;{% endif %}">{{ i.text }}</span>
+          </td>
+          <td>
+            {% if i.done %}
+              {% if i.done_by %}
+                {{ i.done_by.preferred_name|default:i.done_by.username }}
+              {% else %}
+                <em>—</em>
+              {% endif %}
+            {% else %}
+              {% if i.created_by %}
+                added by {{ i.created_by.preferred_name|default:i.created_by.username }}
+              {% else %}
+                <em>—</em>
+              {% endif %}
+            {% endif %}
+          </td>
+          <td>
+            {% if i.done and i.done_at %}
+              {{ i.done_at|date:"Y-m-d H:i" }}
+            {% elif i.created_at %}
+              {{ i.created_at|date:"Y-m-d H:i" }}
+            {% else %}
+              <em>—</em>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="4"><em>No checklist items.</em></td>
+        </tr>
+      {% endfor %}
+    </table>
+</div>
+<div class="detail">
+  <h3>Attachments</h3>
+  <form class="span" method="post" enctype="multipart/form-data" action="{% url 'projects_staff:task_upload_attachment' task.pk %}">
+    {% csrf_token %}
+    {{ attach_form.file }}
+    {{ attach_form.original_name }}
+    <button class="button is-small" type="submit">Upload</button>
+  </form>
+  <table class="entry alt_entry">
+    <tr>
+      <th>Name</th>
+      <th>Uploaded At</th>
+    </tr>
+    {% for a in task.attachments.all %}
+      <tr>
+        <td><a href="{{ a.file.url }}" target="_blank">{{ a.original_name|default:a.file.name }}</a></td>
+        <td>{{ a.uploaded_at }}</td>
+      </tr>
+    {% empty %}
+      <tr>
+        <td colspan="2"><em>No attachments</em></td>
+      </tr>
+    {% endfor %}
+  </table>
+</div>
+<div class="detail">
+  <h3>Comments</h3>
+  <form class="span" method="post" action="{% url 'projects_staff:task_add_comment' task.pk %}">
+      {% csrf_token %}
+      {{ comment_form.body }}
+      <label>{{ comment_form.is_internal }} Internal (staff-only)</label>
+      <button class="button" type="submit">Post Comment</button>
+  </form>
+  <table class="entry alt_entry">
+    <tr>
+      <th>Author</th>
+      <th>Created at</th>
+      <th>Staff</th>
+      <th>Comment</th>
+    </tr>
+    {% for c in task.comments.all %}
+      <tr>
+        <td><strong>{{ c.author.preferred_name|default:c.author.username }}</strong></td>
+        <td>{{ c.created_at }}</td>
+        <td>{% if c.is_internal %}<span class="badge">internal</span>{% endif %}</td>
+        <td>{{ c.body|linebreaks }}</td>
+      </tr>
+    {% empty %}
+      <tr>
+        <td colspan="4"><em>No comments yet.</em></td>
+      </tr>
+    {% endfor %}
+  </table>
+</div>
+<div class="detail">
+  <h3>Admin</h3>
+  <div class="form">
+    <h3>Update Status</h3>
+    <form  method="post" action="{% url 'projects_staff:task_move_status' task.pk %}" style="display:inline-block;margin-right:1rem;">
+      {% csrf_token %}
+      {{ move_form.status }}
+      <button class="button is-small" type="submit">Update Status</button>
+    </form>
+  </div>
+  <div class="form">
+    <h3>Set Sprint</h3>
+    <form method="post" action="{% url 'projects_staff:task_assign_sprint' task.pk %}" style="display:inline-block;">
+      {% csrf_token %}
+      {{ sprint_form.sprint }}
+      <button class="button is-small" type="submit">Set Sprint</button>
+      <small>Leave blank to move to Backlog</small>
+    </form>
+  </div>
+  <div class="form">
+    <h3>Update Progress</h3>
+    <form class="span" method="post" action="{% url 'projects_staff:task_update_progress' task.pk %}" style="display:grid;gap:.5rem;grid-template-columns: 160px 1fr auto;">
+      {% csrf_token %}
+      <label class="label" for="id_percent">Progress (%)</label>
+      <input type="number" step="0.01" min="0" max="100" name="percent" id="id_percent" value="{{ task.percent_complete }}">
+      <button class="button is-primary" type="submit">Update</button>
+    </form>
+  </div>
+  <div class="form">
+    <h3>Alt Progress Update</h3>
+    <form class="span" method="post" action="{% url 'projects_staff:task_nudge_progress' task.pk 'minus' %}">
+      {% csrf_token %}
+      <button class="button is-light" type="submit">−10%</button>
+    </form>
+    <form method="post" action="{% url 'projects_staff:task_nudge_progress' task.pk 'plus' %}">
+      {% csrf_token %}
+      <button class="button is-light" type="submit">+10%</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -43,6 +43,47 @@ body {
         }
         .dash {
             .flexrow();
+            width: 80%;
+            align-items: flex-start;
+
+            .proposals, .projects {
+                .flexcolumn();
+                width: 50%;
+
+                .detail {
+                    .flexcolumn();
+                    align-items: flex-start;
+                    margin: 0 0 1em 0;
+                    width: 75%;
+
+                    h3 {
+                        text-align: center;
+                        background-color: var(--green);
+                        color: var(--white);
+                        width: 100%;
+                        padding: 1em;
+                        margin-bottom: .5em;
+                        .yb-border();
+                        font-size: 1.4em;
+                    }
+                    .entry {
+                        width: 100%;
+                        margin: 1em 0;
+                        
+                        th {
+                            background-color: var(--alt_green);
+                            color: var(--black);
+                            font-size: 1.2em;
+                            margin: 1em 0;
+                        }
+                        td {
+                            width: 50%;
+                            text-align: left;
+                            padding-left: .5em;
+                        }
+                    }
+                }
+            }
         }
         .list_menu {
             .flexcolumn();

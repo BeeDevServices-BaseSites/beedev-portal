@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% load page_title user_extras %}
+{% block content %}
+<head>
+    <link rel="stylesheet" href="{% static 'css/project.css'%}?v={% now 'U' %}">
+  </head>
+
+<h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
+<div class="mini_menu">
+    <h2><a href="{% url 'userApp:employee_home' %}">Dashboard</a></h2>
+    <h2><a href="{% url 'projects_staff:project_create' %}" class="icon_link"><img src="{% static 'images/hex_plus.png' %}" alt="icon" class="icon"><span>New Project</span></a></h2>
+</div>
+
+<div>
+  <form method="get" class="form">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search projects…" />
+    <select name="status">
+      <option value="">All Statuses</option>
+      {% for val,label in statuses %}
+        <option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <select name="company">
+      <option value="">All Companies</option>
+      {% for c in companies %}
+            <option value="{{ c.id }}" {% if company_filter|stringformat:'s' == c.id|stringformat:'s' %}selected{% endif %}>
+            {{ c.name }}
+            </option>
+        {% endfor %}
+    </select>
+    <select name="active">
+      <option value="">Active/Inactive</option>
+      <option value="1" {% if active == "1" %}selected{% endif %}>Active</option>
+      <option value="0" {% if active == "0" %}selected{% endif %}>Inactive</option>
+    </select>
+    <button class="button" type="submit">Filter</button>
+  </form>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Company</th>
+      <th>Project</th>
+      <th>Status</th>
+      <th>Stage</th>
+      <th>Manager</th>
+      <th>%</th>
+      <th>Priority</th>
+      <th>Active</th>
+      <th>Links</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in page_obj %}
+      <tr>
+        <td>{{ p.company.name }}</td>
+        <td>
+          <strong>{{ p.name }}</strong><br>
+          <small><a href="{% url 'projects_staff:project_board' p.slug %}">Open Board</a></small>
+        </td>
+        <td>{{ p.get_status_display }}</td>
+        <td>{{ p.get_stage_display|default:"—" }}</td>
+        <td>{{ p.manager.preferred_name|default:p.manager.username|default:"—" }}</td>
+        <td>{{ p.percent_complete }}%</td>
+        <td>{{ p.priority }}</td>
+        <td>{% if p.is_active %}✅{% else %}—{% endif %}</td>
+        <td>{{ p.links.count }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="9"><em>No projects found.</em></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if page_obj.has_other_pages %}
+  <nav class="pagination" role="navigation" aria-label="pagination" style="margin-top:1rem;">
+    {% if page_obj.has_previous %}
+      <a class="pagination-previous" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&status={{ status }}&company={{ company }}&active={{ active }}">Previous</a>
+    {% else %}
+      <span class="pagination-previous is-disabled">Previous</span>
+    {% endif %}
+    {% if page_obj.has_next %}
+      <a class="pagination-next" href="?page={{ page_obj.next_page_number }}&q={{ q }}&status={{ status }}&company={{ company }}&active={{ active }}">Next page</a>
+    {% else %}
+      <span class="pagination-next is-disabled">Next page</span>
+    {% endif %}
+    <ul class="pagination-list">
+      <li><span class="pagination-link is-current">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+    </ul>
+  </nav>
+{% endif %}
+{% endblock %}

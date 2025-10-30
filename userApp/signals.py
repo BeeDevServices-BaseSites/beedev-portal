@@ -1,9 +1,15 @@
+# userApp/signals.py
+from __future__ import annotations
 from django.db.models.signals import post_migrate, post_save, pre_save, m2m_changed
 from django.dispatch import receiver
+from django.contrib.auth.signals import user_logged_in
+from django.db import transaction
 from django.contrib.auth.models import Group
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from .models import ClientProfile, EmployeeProfile  # if you created EmployeeProfile
+from .models import ClientProfile, EmployeeProfile
+from proposalApp.models import ProposalAccountInvite, ProposalEvent
+from companyApp.models import CompanyMembership
 
 ROLE_GROUPS = ["Owner", "Admin", "Employee", "Client"]
 AUX_GROUPS  = ["HR"]
@@ -71,3 +77,56 @@ def ensure_staff_follows_hr_group(sender, instance: User, action, reverse, model
         desired_staff = (instance.role in company_roles) or in_hr
         if instance.is_staff != desired_staff:
             instance.__class__.objects.filter(pk=instance.pk).update(is_staff=desired_staff)
+
+
+@receiver(user_logged_in)
+def link_company_from_pending_invite(sender, request, user, **kwargs):
+    """
+    When a user logs in and we previously stashed a proposal invite token in
+    session (from the invite flow), attach them to the invite's company and
+    mark the invite used.
+
+    This lets one User (same email) be linked to multiple companies.
+    """
+    # Pull & clear the token so we don't re-run.
+    token = None
+    try:
+        token = request.session.pop("pending_invite_token", None)
+    except Exception:
+        token = None
+
+    if not token:
+        return
+
+    try:
+        inv = ProposalAccountInvite.objects.select_related("company", "proposal").get(token=token)
+    except ProposalAccountInvite.DoesNotExist:
+        return
+
+    # Guard: if the invite is already used/expired, do nothing
+    if inv.is_used or inv.is_expired:
+        return
+
+    with transaction.atomic():
+        # Link user ↔ company (idempotent)
+        CompanyMembership.objects.get_or_create(
+            company=inv.company,
+            user=user,
+            defaults={"is_active": True},
+        )
+
+        # Mark invite used
+        inv.mark_used(user=user, save=True)
+
+        # Optional: write an event on the proposal for audit
+        try:
+            if inv.proposal_id:
+                ProposalEvent.objects.create(
+                    proposal=inv.proposal,
+                    kind=ProposalEvent.Kind.UPDATED,
+                    actor=None,
+                    data={"invite": {"token": inv.token, "used_by": user.email, "via": "login"}},
+                )
+        except Exception:
+            # Never block login on event logging
+            pass
