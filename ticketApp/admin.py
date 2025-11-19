@@ -1,5 +1,4 @@
 # ticketApp/admin.py
-
 from django.contrib import admin
 from django.utils import timezone
 from django.utils.html import format_html
@@ -9,21 +8,23 @@ from django.db.models import Count, Q
 
 from .models import Ticket, TicketMessage, TicketAttachment, TicketEvent
 from companyApp.models import CompanyMember
-from userApp.models import User
 
 
 # ---------- permission helpers ----------
-
-def is_owner(user):
-    return user.is_active and (user.is_superuser or getattr(user, "role", None) == User.Roles.OWNER)
-
-
-def is_staff_role(user):
-    return user.is_active and getattr(user, "role", None) in {User.Roles.OWNER, User.Roles.STAFF}
+def is_owner(u):
+    return u.is_active and (u.is_superuser or u.groups.filter(name="Owner").exists())
 
 
-def can_edit(user):
-    return is_staff_role(user)
+def is_admin(u):
+    return u.is_active and u.groups.filter(name="Admin").exists()
+
+
+def is_hr(u):
+    return u.is_active and u.groups.filter(name="HR").exists()
+
+
+def can_edit(u):
+    return is_owner(u) or is_admin(u)
 
 
 # ============================ Inlines ============================
@@ -35,7 +36,7 @@ class TicketAttachmentInline(admin.TabularInline):
     readonly_fields = ("uploaded_at",)
 
     def has_delete_permission(self, request, obj=None):
-        return can_edit(request.user)
+        return is_owner(request.user) or is_admin(request.user)
 
 
 class TicketMessageInline(admin.StackedInline):
@@ -47,19 +48,23 @@ class TicketMessageInline(admin.StackedInline):
     show_change_link = True
 
     def has_delete_permission(self, request, obj=None):
-        return can_edit(request.user)
+        return is_owner(request.user) or is_admin(request.user)
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """
+        Limit 'author' choices to:
+        - staff users
+        - client users who are members of the ticket's company
+        """
         field = super().formfield_for_foreignkey(db_field, request, **kwargs)
         if db_field.name == "author":
-            ticket = getattr(request, "_current_ticket_obj", None)
-            if ticket and ticket.pk:
+            t = getattr(request, "_current_ticket_obj", None)
+            if t and t.pk:
                 member_ids = CompanyMember.objects.filter(
-                    company=ticket.company,
-                    is_active=True,
+                    company=t.company, is_active=True
                 ).values_list("user_id", flat=True)
                 field.queryset = field.queryset.filter(
-                    Q(role__in=[User.Roles.STAFF, User.Roles.OWNER]) | Q(pk__in=member_ids)
+                    Q(is_staff=True) | Q(pk__in=member_ids)
                 )
         return field
 
@@ -78,9 +83,15 @@ class TicketEventInline(admin.TabularInline):
 @admin.register(Ticket)
 class TicketAdmin(admin.ModelAdmin):
     list_display = (
-        "public_key", "subject", "company", "project",
-        "status", "priority", "assigned_to", "customer_user",
-        "updated_at", "last_client_reply_at",
+        "public_key",
+        "subject",
+        "company",
+        "status",
+        "priority",
+        "assigned_to",
+        "customer_user",
+        "updated_at",
+        "last_client_reply_at",
         "attachments_link",
         "attention_flag",
     )
@@ -90,34 +101,53 @@ class TicketAdmin(admin.ModelAdmin):
         "subject",
         "description",
         "company__name",
-        "project__name",
         "assigned_to__username",
+        "assigned_to__email",
         "customer_user__username",
+        "customer_user__email",
     )
-    autocomplete_fields = ("company", "project", "customer_user", "created_by", "assigned_to", "watchers")
+    autocomplete_fields = ("company", "customer_user", "created_by", "assigned_to", "watchers")
 
     inlines = [TicketMessageInline, TicketEventInline]
 
-    readonly_fields = ("public_key", "created_at", "updated_at", "last_client_reply_at", "closed_at")
+    readonly_fields = ("public_key", "created_at", "updated_at", "last_client_reply_at")
 
     fieldsets = (
-        ("Ticket", {
-            "fields": ("company", "project", "public_key", "subject", "description", "category"),
-        }),
-        ("Status", {
-            "fields": ("status", "priority", "assigned_to"),
-        }),
-        ("Client & Audit", {
-            "fields": (
-                "customer_user",
-                "created_by",
-                "watchers",
-                "last_client_reply_at",
-                "closed_at",
-                "created_at",
-                "updated_at",
-            ),
-        }),
+        (
+            "Ticket",
+            {
+                "fields": (
+                    "company",
+                    "public_key",
+                    "subject",
+                    "description",
+                    "category",
+                )
+            },
+        ),
+        (
+            "Status",
+            {
+                "fields": (
+                    "status",
+                    "priority",
+                    "assigned_to",
+                )
+            },
+        ),
+        (
+            "Client & Audit",
+            {
+                "fields": (
+                    "customer_user",
+                    "created_by",
+                    "watchers",
+                    "last_client_reply_at",
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
     )
 
     actions = [
@@ -129,13 +159,10 @@ class TicketAdmin(admin.ModelAdmin):
         "assign_to_me",
     ]
 
-    # ----- queryset annotation -----
-
+    # annotate attachment count for list display
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.annotate(_attach_count=Count("messages__attachments"))
-
-    # ----- list display helpers -----
 
     def attachments_link(self, obj):
         count = getattr(obj, "_attach_count", 0) or 0
@@ -144,49 +171,53 @@ class TicketAdmin(admin.ModelAdmin):
         )
         url = f"{url}?{urlencode({'message__ticket__id__exact': obj.id})}"
         return format_html('<a href="{}">{}</a>', url, f"{count} file(s)")
+
     attachments_link.short_description = "Attachments"
 
+    # simple visual cue: urgent open tickets
     def attention_flag(self, obj):
-        if obj.status in (Ticket.Status.NEW, Ticket.Status.OPEN, Ticket.Status.INPROGRESS) and \
-           obj.priority in (Ticket.Priority.HIGH, Ticket.Priority.URGENT):
-            return format_html('<span style="color:#b91c1c;font-weight:600;">ATTN</span>')
+        if (
+            obj.status
+            in (Ticket.Status.NEW, Ticket.Status.OPEN, Ticket.Status.INPROGRESS)
+            and obj.priority in (Ticket.Priority.HIGH, Ticket.Priority.URGENT)
+        ):
+            return format_html(
+                '<span style="color:#b91c1c;font-weight:600;">ATTN</span>'
+            )
         return ""
+
     attention_flag.short_description = ""
 
-    # ----- permissions -----
-
+    # permissions
     def has_module_permission(self, request):
-        return request.user.is_authenticated and is_staff_role(request.user)
-
-    def has_view_permission(self, request, obj=None):
-        return self.has_module_permission(request)
+        return request.user.is_staff
 
     def has_add_permission(self, request):
-        return can_edit(request.user)
+        return is_owner(request.user) or is_admin(request.user)
 
     def has_change_permission(self, request, obj=None):
-        return can_edit(request.user)
+        return is_owner(request.user) or is_admin(request.user)
 
     def has_delete_permission(self, request, obj=None):
-        return can_edit(request.user)
+        return is_owner(request.user) or is_admin(request.user)
 
-    # ----- actions -----
-
+    # actions
+    @admin.action(description="Mark OPEN")
     def set_open(self, request, queryset):
         updated = queryset.update(status=Ticket.Status.OPEN)
         self.message_user(request, f"Marked {updated} ticket(s) OPEN.")
-    set_open.short_description = "Mark OPEN"
 
+    @admin.action(description="Mark IN PROGRESS")
     def set_inprogress(self, request, queryset):
         updated = queryset.update(status=Ticket.Status.INPROGRESS)
         self.message_user(request, f"Marked {updated} ticket(s) IN PROGRESS.")
-    set_inprogress.short_description = "Mark IN PROGRESS"
 
+    @admin.action(description="Mark PENDING CLIENT")
     def set_pending_client(self, request, queryset):
         updated = queryset.update(status=Ticket.Status.PENDING)
         self.message_user(request, f"Marked {updated} ticket(s) PENDING CLIENT.")
-    set_pending_client.short_description = "Mark PENDING CLIENT"
 
+    @admin.action(description="Mark RESOLVED")
     def set_resolved(self, request, queryset):
         now = timezone.now()
         updated = 0
@@ -196,8 +227,8 @@ class TicketAdmin(admin.ModelAdmin):
             t.save(update_fields=["status", "closed_at", "updated_at"])
             updated += 1
         self.message_user(request, f"Marked {updated} ticket(s) RESOLVED.")
-    set_resolved.short_description = "Mark RESOLVED"
 
+    @admin.action(description="Mark CLOSED")
     def set_closed(self, request, queryset):
         now = timezone.now()
         updated = 0
@@ -207,48 +238,50 @@ class TicketAdmin(admin.ModelAdmin):
             t.save(update_fields=["status", "closed_at", "updated_at"])
             updated += 1
         self.message_user(request, f"Closed {updated} ticket(s).")
-    set_closed.short_description = "Mark CLOSED"
 
+    @admin.action(description="Assign to me")
     def assign_to_me(self, request, queryset):
         updated = queryset.update(assigned_to=request.user)
         self.message_user(request, f"Assigned {updated} ticket(s) to you.")
-    assign_to_me.short_description = "Assign to me"
-
-    # ----- field filtering -----
 
     def get_form(self, request, obj=None, **kwargs):
+        # stash current object so inlines & formfield filters can see the ticket
         request._current_ticket_obj = obj
         return super().get_form(request, obj, **kwargs)
 
     def formfield_for_manytomany(self, db_field, request, **kwargs):
+        """
+        Limit watchers to:
+        - staff users
+        - client users who are members of the ticket's company
+        """
         field = super().formfield_for_manytomany(db_field, request, **kwargs)
         if db_field.name == "watchers":
-            ticket = getattr(request, "_current_ticket_obj", None)
-            if ticket and ticket.pk:
+            t = getattr(request, "_current_ticket_obj", None)
+            if t and t.pk:
                 member_ids = CompanyMember.objects.filter(
-                    company=ticket.company,
-                    is_active=True,
+                    company=t.company, is_active=True
                 ).values_list("user_id", flat=True)
                 field.queryset = field.queryset.filter(
-                    Q(role__in=[User.Roles.STAFF, User.Roles.OWNER]) | Q(pk__in=member_ids)
+                    Q(is_staff=True) | Q(pk__in=member_ids)
                 )
         return field
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         field = super().formfield_for_foreignkey(db_field, request, **kwargs)
-        ticket = getattr(request, "_current_ticket_obj", None)
+        t = getattr(request, "_current_ticket_obj", None)
 
-        if ticket and ticket.pk and db_field.name in ("assigned_to", "customer_user"):
+        if t and t.pk and db_field.name in ("assigned_to", "customer_user"):
             member_ids = CompanyMember.objects.filter(
-                company=ticket.company,
-                is_active=True,
+                company=t.company, is_active=True
             ).values_list("user_id", flat=True)
 
+            # assigned_to can be staff OR company members; customer_user should be company members
             if db_field.name == "assigned_to":
                 field.queryset = field.queryset.filter(
-                    Q(role__in=[User.Roles.STAFF, User.Roles.OWNER]) | Q(pk__in=member_ids)
+                    Q(is_staff=True) | Q(pk__in=member_ids)
                 )
-            else:
+            else:  # customer_user
                 field.queryset = field.queryset.filter(pk__in=member_ids)
 
         return field
@@ -261,10 +294,10 @@ class TicketMessageAdmin(admin.ModelAdmin):
     search_fields = ("ticket__public_key", "ticket__subject", "body")
     autocomplete_fields = ("ticket", "author")
     readonly_fields = ("created_at",)
-    inlines = [TicketAttachmentInline]
+    inlines = [TicketAttachmentInline]  # attachments live at message level
 
     def has_module_permission(self, request):
-        return request.user.is_authenticated and is_staff_role(request.user)
+        return request.user.is_staff
 
     def has_add_permission(self, request):
         return can_edit(request.user)
@@ -273,7 +306,7 @@ class TicketMessageAdmin(admin.ModelAdmin):
         return can_edit(request.user)
 
     def has_delete_permission(self, request, obj=None):
-        return can_edit(request.user)
+        return is_owner(request.user) or is_admin(request.user)
 
 
 @admin.register(TicketAttachment)
@@ -284,7 +317,9 @@ class TicketAttachmentAdmin(admin.ModelAdmin):
     readonly_fields = ("uploaded_at",)
 
     def has_module_permission(self, request):
-        return request.user.is_authenticated and is_staff_role(request.user)
+        if is_hr(request.user) or not request.user.is_staff:
+            return False
+        return True
 
     def has_add_permission(self, request):
         return can_edit(request.user)
@@ -293,4 +328,4 @@ class TicketAttachmentAdmin(admin.ModelAdmin):
         return can_edit(request.user)
 
     def has_delete_permission(self, request, obj=None):
-        return can_edit(request.user)
+        return is_owner(request.user) or is_admin(request.user)

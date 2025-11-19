@@ -1,5 +1,4 @@
 # ticketApp/models.py
-
 import os
 import uuid
 import datetime
@@ -11,7 +10,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 ALLOWED_FILE_EXTS = ["pdf", "png", "jpg", "jpeg", "webp", "txt", "docx", "xlsx"]
-MAX_FILE_BYTES = 20 * 1024 * 1024  # 20 MB
+MAX_FILE_BYTES = 20 * 1024 * 1024  # 20MB
 
 
 def validate_file_size(f):
@@ -21,29 +20,25 @@ def validate_file_size(f):
 
 def ticket_upload_to(instance, filename):
     """
-    MEDIA path:
-      tickets/<company-or-project>/<ticket-key>/YYYY/MM/<uuid>.<ext>
+    MEDIA: tickets/<company-or-project>/<ticket-key>/<uuid>.<ext>
+
+    We only have company now (no projectApp.Project), so we use:
+    tickets/<company-slug>/<ticket-key>/YYYY/MM/<uuid>.<ext>
     """
     comp = (
         getattr(instance.message.ticket.company, "slug", None)
         or f"company-{instance.message.ticket.company_id}"
     )
-    key = instance.message.ticket.public_key or f"t-{instance.message.ticket_id or 'new'}"
+    key = (
+        instance.message.ticket.public_key
+        or f"t-{instance.message.ticket_id or 'new'}"
+    )
     ext = os.path.splitext(filename)[1].lower()
     today = datetime.date.today()
     return f"tickets/{comp}/{key}/{today.year}/{today.month:02d}/{uuid.uuid4().hex}{ext}"
 
 
-# =======================================================================
-#                               TICKET
-# =======================================================================
-
 class Ticket(models.Model):
-    """
-    A support ticket linked to a Company (and optionally a Project).
-    Clients can open tickets; staff can respond and track status.
-    """
-
     class Status(models.TextChoices):
         NEW        = "NEW",        "New"
         OPEN       = "OPEN",       "Open"
@@ -61,7 +56,7 @@ class Ticket(models.Model):
     class Category(models.TextChoices):
         CONTENT = "CONTENT", "Content"
         BUG     = "BUG",     "Bug"
-        REQUEST = "REQUEST", "Feature / Request"
+        REQUEST = "REQUEST", "Feature/Request"
         BILLING = "BILLING", "Billing"
         OTHER   = "OTHER",   "Other"
 
@@ -70,47 +65,39 @@ class Ticket(models.Model):
         on_delete=models.CASCADE,
         related_name="tickets",
     )
-    project = models.ForeignKey(
-        "projectApp.Project",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="tickets",
-    )
 
-    # Who the ticket is “for” (the client contact)
+    # No project FK anymore in Portal Lite
+
     customer_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
         related_name="tickets_opened",
-        help_text="Client user this ticket is for/under.",
+        help_text="The client user who opened this ticket, if any.",
     )
-
-    # Who created it in the system (could be staff on behalf of a client)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
         related_name="tickets_created",
+        help_text="Staff user who first created the ticket (or same as customer_user if client-created).",
     )
-
-    # Assigned staff
     assigned_to = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
         related_name="tickets_assigned",
+        help_text="Staff assigned to handle this ticket.",
     )
 
     public_key = models.CharField(
         max_length=24,
         unique=True,
         blank=True,
-        help_text="Readable key, e.g., T-2025-AB12CD34",
+        help_text="e.g., T-2025-AB12CD34",
     )
     subject = models.CharField(max_length=200)
     description = models.TextField(blank=True)
@@ -138,7 +125,7 @@ class Ticket(models.Model):
         settings.AUTH_USER_MODEL,
         blank=True,
         related_name="ticket_watchlist",
-        help_text="Staff or clients to notify of updates.",
+        help_text="Staff and/or client users who should get notified about updates.",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -166,18 +153,7 @@ class Ticket(models.Model):
         return self.status not in {self.Status.RESOLVED, self.Status.CLOSED}
 
 
-# =======================================================================
-#                           TICKET MESSAGE
-# =======================================================================
-
 class TicketMessage(models.Model):
-    """
-    Messages in a ticket thread.
-
-    - STAFF vs CLIENT author
-    - `is_internal` hides the message from the client
-    """
-
     class AuthorKind(models.TextChoices):
         STAFF  = "STAFF",  "Staff"
         CLIENT = "CLIENT", "Client"
@@ -222,16 +198,11 @@ class TicketMessage(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean(exclude=None)
         super().save(*args, **kwargs)
-
         # Update ticket “last client reply” for SLA/reporting
         if self.author_kind == self.AuthorKind.CLIENT and not self.is_internal:
             self.ticket.last_client_reply_at = self.created_at
             self.ticket.save(update_fields=["last_client_reply_at", "updated_at"])
 
-
-# =======================================================================
-#                         TICKET ATTACHMENT
-# =======================================================================
 
 class TicketAttachment(models.Model):
     message = models.ForeignKey(
@@ -250,21 +221,7 @@ class TicketAttachment(models.Model):
         return self.original_name or os.path.basename(self.file.name)
 
 
-# =======================================================================
-#                           TICKET EVENT LOG
-# =======================================================================
-
 class TicketEvent(models.Model):
-    """
-    Lightweight audit log for tickets:
-    - created
-    - assigned
-    - status change
-    - comment
-    - attachment
-    - closed
-    """
-
     class Kind(models.TextChoices):
         CREATED    = "CREATED",    "Created"
         ASSIGNED   = "ASSIGNED",   "Assigned"

@@ -39,7 +39,8 @@ INSTALLED_APPS = [
     'userApp.apps.UserappConfig',
     'companyApp.apps.CompanyappConfig',
     'ticketApp.apps.TicketappConfig',
-    'announceApp.apps.AnncounceappConfig',
+    'prospectApp.apps.ProspectappConfig',
+    'announceApp.apps.AnnounceappConfig',
     *(['django_browser_reload'] if env.bool('DEBUG', default=False) else []),
 ]
 
