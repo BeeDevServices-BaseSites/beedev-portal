@@ -1,9 +1,7 @@
 # userApp/models.py
-
 import os
 import uuid
 import datetime
-
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.conf import settings
@@ -31,6 +29,29 @@ def avatar_upload_to(instance, filename):
     user_id = getattr(instance.user, "id", "anon")
     return f"profiles/{today.year}/{today.month:02d}/{user_id}-{uuid.uuid4().hex}.{ext}"
 
+
+# ---------- Staff document helpers (contracts & payout statements) ----------
+
+ALLOWED_DOC_EXTS = ["pdf", "jpg", "jpeg", "png", "webp", "doc", "docx", "xls", "xlsx"]
+MAX_DOC_BYTES = 10 * 1024 * 1024  # 10 MB
+
+def validate_doc_size(f):
+    if f.size and f.size > MAX_DOC_BYTES:
+        raise ValidationError(f"File too large (>{MAX_DOC_BYTES // 1024 // 1024}MB).")
+
+def staff_document_upload_to(instance, filename):
+    """
+    Store staff docs at:
+      media/staff-docs/<userId>/<doctype>/<uuid>.<ext>
+    """
+    ext = os.path.splitext(filename)[1].lower().lstrip(".") or "pdf"
+    if ext not in ALLOWED_DOC_EXTS:
+        ext = "pdf"
+    user_id = instance.user_id or "staff"
+    doctype = instance.doc_type or "other"
+    return f"staff-docs/{user_id}/{doctype}/{uuid.uuid4().hex}.{ext}"
+
+
 # =======================================================================
 #                               USER
 # =======================================================================
@@ -46,10 +67,8 @@ class CustomUserManager(BaseUserManager):
         return user
 
     def create_superuser(self, username, email, password=None, **extra_fields):
-        # Superuser flags
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
-        # Business label for you
         extra_fields.setdefault("role", User.Roles.OWNER)
 
         if extra_fields.get("is_staff") is not True:
@@ -62,7 +81,7 @@ class CustomUserManager(BaseUserManager):
 
 class User(AbstractUser):
     class Roles(models.TextChoices):
-        OWNER = "OWNER", "Owner" 
+        OWNER = "OWNER", "Owner"
         STAFF = "STAFF", "Staff"
         CLIENT = "CLIENT", "Client"
 
@@ -77,6 +96,19 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username or self.email
+
+    # -------- Convenience role helpers (nice for views & templates) --------
+    @property
+    def is_owner_role(self) -> bool:
+        return self.role == self.Roles.OWNER
+
+    @property
+    def is_staff_role(self) -> bool:
+        return self.role in {self.Roles.STAFF, self.Roles.OWNER}
+
+    @property
+    def is_client_role(self) -> bool:
+        return self.role == self.Roles.CLIENT
 
     @property
     def preferred_name(self) -> str:
@@ -184,3 +216,64 @@ class EmployeeProfile(models.Model):
 
     def __str__(self):
         return f"EmployeeProfile({self.user.username or self.user.email})"
+
+
+# =======================================================================
+#                           STAFF DOCUMENTS
+# =======================================================================
+
+class StaffDocument(models.Model):
+    class DocType(models.TextChoices):
+        CONTRACT         = "contract", "Contract"
+        PAYOUT_STATEMENT = "payout_statement", "Payout Statement"
+        OTHER            = "other", "Other"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="staff_documents",
+    )
+
+    doc_type = models.CharField(
+        max_length=40,
+        choices=DocType.choices,
+        default=DocType.OTHER,
+    )
+
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+
+    # Either an uploaded file, or an external URL (e.g. Google Sheet),
+    # or both if you want.
+    file = models.FileField(
+        upload_to=staff_document_upload_to,
+        blank=True,
+        null=True,
+        validators=[
+            FileExtensionValidator(ALLOWED_DOC_EXTS),
+            validate_doc_size,
+        ],
+        help_text="PDF or image files up to 10MB.",
+    )
+
+    external_url = models.URLField(
+        blank=True,
+        help_text="Optional external URL (e.g. Google Sheet for payouts).",
+    )
+
+    year  = models.PositiveIntegerField(blank=True, null=True)
+    month = models.PositiveSmallIntegerField(blank=True, null=True, help_text="1–12 if applicable")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user} · {self.title} ({self.doc_type})"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if not self.file and not self.external_url:
+            raise ValidationError("Provide either an uploaded file or an external URL.")

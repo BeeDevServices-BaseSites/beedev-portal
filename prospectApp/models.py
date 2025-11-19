@@ -1,9 +1,10 @@
 # prospectApp/models.py
 
+from datetime import timedelta
+
 from django.db import models, transaction
 from django.conf import settings
 from django.utils import timezone
-from datetime import timedelta
 
 User = settings.AUTH_USER_MODEL
 
@@ -19,7 +20,6 @@ class TimeStamped(models.Model):
     class Meta:
         abstract = True
 
-
 def _coalesce(*vals):
     for v in vals:
         if v:
@@ -28,20 +28,19 @@ def _coalesce(*vals):
                 return v
     return ""
 
-
 # =======================================================================
 #                              PROSPECT
 # =======================================================================
 
 class Prospect(TimeStamped):
-
     class Status(models.TextChoices):
-        NEW = "NEW", "New"
-        QUALIFIED = "QUALIFIED", "Qualified"
-        PROPOSAL_SENT = "PROPOSAL_SENT", "Proposal Sent"
-        DEPOSIT_PENDING = "DEPOSIT_PENDING", "Deposit Pending"
-        DEPOSIT_PAID = "DEPOSIT_PAID", "Deposit Paid"
-        CLOSED_LOST = "CLOSED_LOST", "Closed / Lost"
+        NEW              = "NEW", "New"
+        QUALIFIED        = "QUALIFIED", "Qualified"
+        CONSULT_PENDING  = "CONSULT_PENDING", "Consultation Pending"
+        CONSULT_COMPLETE = "CONSULT_COMPLETE", "Consultation Complete"
+        PROPOSAL_SENT    = "PROPOSAL_SENT", "Proposal Sent"
+        WON              = "WON", "Won"
+        CLOSED_LOST      = "CLOSED_LOST", "Closed / Lost"
 
     full_name = models.CharField(max_length=120, blank=True)
     company_name = models.CharField(max_length=160, blank=True)
@@ -64,7 +63,7 @@ class Prospect(TimeStamped):
     sheet_url = models.URLField(
         max_length=500,
         blank=True,
-        help_text="Link to external sheet/record for this prospect.",
+        help_text="Link to external sheet/record for this prospect (e.g. consult form).",
     )
 
     notes = models.TextField(blank=True)
@@ -100,7 +99,6 @@ class Prospect(TimeStamped):
     )
 
     def save(self, *args, **kwargs):
-        # Normalize email
         self.email = (self.email or "").strip().lower()
         super().save(*args, **kwargs)
 
@@ -113,66 +111,50 @@ class Prospect(TimeStamped):
         return bool(self.website_url)
 
     @property
-    def company(self):
-        """
-        Convenience accessor:
-        If a Company has been created and linked, return it.
-        (Company model has a OneToOneField back to Prospect.)
-        """
+    def linked_company(self):
         return getattr(self, "company", None)
 
     # -------------------------------------------------------------------
-    # Helper: create/update Company when ready
+    # Helper: create/update Company when ready (typically on WON)
     # -------------------------------------------------------------------
 
     @transaction.atomic
     def create_or_update_company(self, *, actor=None):
-
-        from companyApp.models import Company  # local import to avoid cycles
+        from companyApp.models import Company
 
         company_name = _coalesce(
             self.company_name,
             self.full_name,
-            self.email.split("@")[0],
+            (self.email or "").split("@")[0],
             "Unnamed Company",
         )
 
-        contact_name = _coalesce(
-            self.full_name,
-        )
-
+        contact_name = _coalesce(self.full_name)
         contact_email = (self.email or "").strip().lower()
 
-        # Prefer linking via the OneToOne prospect field.
         company, created = Company.objects.get_or_create(
             prospect=self,
             defaults={
                 "name": company_name,
-                "primary_contact_name": contact_name,
-                "primary_contact_email": contact_email,
+                "contact_name": contact_name,
+                "contact_email": contact_email,
                 "phone": self.phone or "",
                 "website": self.website_url or "",
-                "status": Company.Status.CONVERTED_PROSPECT,
-                "pipeline_status": Company.PipelineStatus.NEW,
-                "work_status": Company.WorkStatus.DEPOSIT_PAID
-                if self.status == self.Status.DEPOSIT_PAID
-                else Company.WorkStatus.NONE,
                 "consultation_sheet_url": self.sheet_url or "",
                 "created_by": actor,
             },
         )
 
-        # If company already existed for this prospect, we only do light fills.
         if not created:
             fields_to_update = []
 
-            if not company.primary_contact_name and contact_name:
-                company.primary_contact_name = contact_name
-                fields_to_update.append("primary_contact_name")
+            if not company.contact_name and contact_name:
+                company.contact_name = contact_name
+                fields_to_update.append("contact_name")
 
-            if not company.primary_contact_email and contact_email:
-                company.primary_contact_email = contact_email
-                fields_to_update.append("primary_contact_email")
+            if not company.contact_email and contact_email:
+                company.contact_email = contact_email
+                fields_to_update.append("contact_email")
 
             if not company.phone and self.phone:
                 company.phone = self.phone
@@ -192,29 +174,23 @@ class Prospect(TimeStamped):
         return company
 
     # -------------------------------------------------------------------
-    # Helper: mark deposit paid + create PortalInvite
+    # Helper: create PortalInvite (used by your 'Send Invite' button)
     # -------------------------------------------------------------------
 
     @transaction.atomic
-    def mark_deposit_paid_and_invite(self, *, expires_days=7, actor=None):
-
+    def create_portal_invite(self, *, expires_days: int = 7, actor=None):
         from companyApp.models import PortalInvite
-
-        # Update prospect status
-        if self.status != self.Status.DEPOSIT_PAID:
-            self.status = self.Status.DEPOSIT_PAID
-            self.updated_by = actor
-            self.save(update_fields=["status", "updated_by", "updated_at"])
 
         company = self.create_or_update_company(actor=actor)
 
         invite = PortalInvite.objects.create(
             company=company,
+            prospect=self,
             email=self.email,
             expires_at=timezone.now() + timedelta(days=expires_days),
+            created_by=actor,
         )
 
-        # Actual email send will be handled in a view, signal, or admin action.
         return company, invite
 
 
