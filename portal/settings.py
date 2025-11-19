@@ -41,7 +41,6 @@ INSTALLED_APPS = [
     'ticketApp.apps.TicketappConfig',
     'prospectApp.apps.ProspectappConfig',
     'announceApp.apps.AnnounceappConfig',
-    *(['django_browser_reload'] if env.bool('DEBUG', default=False) else []),
 ]
 
 MIDDLEWARE = [
@@ -52,7 +51,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    *( ['django_browser_reload.middleware.BrowserReloadMiddleware'] if env.bool('DEBUG', default=False) else [] ),
 ]
 
 ROOT_URLCONF = 'portal.urls'
