@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'ticketApp.apps.TicketappConfig',
     'prospectApp.apps.ProspectappConfig',
     'announceApp.apps.AnnounceappConfig',
+    'core.apps.CoreConfig',
 ]
 
 MIDDLEWARE = [
@@ -110,6 +111,16 @@ LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'US/Eastern'
 USE_I18N = True
 USE_TZ = True
+
+# -------- Branding for PDFs --------
+BRAND_NAME = "BeeDev Services"
+BRAND_LOGO_STATIC = "images/altLogo.png"
+BRAND_TAGLINE = "Your Vision, Hive Crafted"
+BRAND_FAVICON = "images/favicon.png"
+BRAND_WEBSITE = "https://beedev-serices.com"
+BRAND_EMAIL = "developers@beedev-services.com"
+BRAND_PHONE = "(845)271-7840"
+BRAND_ADDRESS = "Wappingers Falls, NY 12590"
 
 # -------- Auth: shared login + redirects --------
 AUTH_USER_MODEL = 'userApp.User'

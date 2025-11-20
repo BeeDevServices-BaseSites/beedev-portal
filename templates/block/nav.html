@@ -1,0 +1,55 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<body>
+    {% block nav %}
+    <nav class="main_nav">
+        {% if request.user.is_authenticated %}
+        {# ===== EMPLOYEE SIDE ===== #}
+            {% if request.user.is_staff or request.user.role == "STAFF" or request.user.role == "OWNER" %}
+                {% if request.user.is_staff %}
+                    <a href="{% url 'admin:index' %}">Admin</a>
+                {% endif %}
+                <a href="">Dashboard</a>
+                <details>
+                    <summary class="has_caret">Accounts</summary>
+                    <div class="menu">
+                        <a href="">Companies</a>
+                        <a href="">Client Contacts</a>
+                    </div>
+                </details>
+                <a href="#">Tickets</a>
+                {% if request.user.role == "OWNER" %}
+                    <a href="">Team</a>
+                {% endif %}
+
+                <details class="menu_group align_right">
+                    <summary class="has_caret">
+                    {{ request.user.first_name|default:request.user.username }}
+                    </summary>
+                    <div class="menu">
+                        <a href="">Profile</a>
+                        <form method="post" action="">
+                            {% csrf_token %}
+                            <button type="submit" class="linklike">Logout</button>
+                        </form>
+                    </div>
+                </details>
+            {% else %}
+            {# ===== CLIENT SIDE ===== #}
+                <a href="">Dashboard</a>
+                <a href="">Profile</a>
+                <form method="post" action="" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="linklike">Logout</button>
+                </form>
+            {% endif %}
+        {% else %}
+            <a href="">Login</a>
+        {% endif %}
+
+    </nav>
+    
+    {% endblock nav %}
+</body>
+</html>     
