@@ -1,18 +1,22 @@
 from django.urls import path, reverse_lazy
+from . import views
 from .views import *
 from django.conf import settings
 from django.conf.urls.static import static
-from django.contrib.auth.views import LogoutView
 
 # All urls are at base/prospects
 
-app_name = "prospectApp"
+app_name = "prospects"
 
 urlpatterns = [
     #  || General Links ||
 
 
     # || Staff/Employee Links ||
+    path("new/", views.add_prospect, name="add_prospect"),
+    path("<int:pk>/", views.view_prospect, name="prospect_detail"),
+    path("<int:pk>/edit/", views.edit_prospect, name="prospect_edit"),
+    path("<int:pk>/status/", views.update_prospect_status, name="prospect_status"),
 
 ]
 if settings.DEBUG:

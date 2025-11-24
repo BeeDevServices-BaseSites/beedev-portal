@@ -82,6 +82,7 @@ class CustomUserManager(BaseUserManager):
 class User(AbstractUser):
     class Roles(models.TextChoices):
         OWNER = "OWNER", "Owner"
+        ADMIN = "ADMIN", "Admin"
         STAFF = "STAFF", "Staff"
         CLIENT = "CLIENT", "Client"
 
@@ -105,6 +106,10 @@ class User(AbstractUser):
     @property
     def is_staff_role(self) -> bool:
         return self.role in {self.Roles.STAFF, self.Roles.OWNER}
+    
+    @property
+    def is_admin_role(self) -> bool:
+        return self.role in {self.Roles.ADMIN, self.Roles.ADMIN}
 
     @property
     def is_client_role(self) -> bool:

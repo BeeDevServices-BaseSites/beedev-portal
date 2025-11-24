@@ -35,12 +35,11 @@ def _coalesce(*vals):
 class Prospect(TimeStamped):
     class Status(models.TextChoices):
         NEW              = "NEW", "New"
-        QUALIFIED        = "QUALIFIED", "Qualified"
         CONSULT_PENDING  = "CONSULT_PENDING", "Consultation Pending"
         CONSULT_COMPLETE = "CONSULT_COMPLETE", "Consultation Complete"
         PROPOSAL_SENT    = "PROPOSAL_SENT", "Proposal Sent"
         WON              = "WON", "Won"
-        CLOSED_LOST      = "CLOSED_LOST", "Closed / Lost"
+        CLOSED_LOST      = "LST", "Closed / Lost"
 
     full_name = models.CharField(max_length=120, blank=True)
     company_name = models.CharField(max_length=160, blank=True)

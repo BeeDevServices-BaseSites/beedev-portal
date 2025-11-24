@@ -37,11 +37,11 @@ def post_login(request):
     return redirect("userApp:client_home")
 
 @login_required
-def staff_home(request):
+def employee_home(request):
     return redirect("admin:index")
 
 @login_required
-def employee_home(request):
+def staff_home(request):
     user = request.user
     if not _allowed_all_staff(request.user):
         return redirect("userApp:client_home")
@@ -58,7 +58,7 @@ def employee_home(request):
     title = "BeeDev Services Work Dashboard"
     ctx.update(base_ctx(request, title=title))
     ctx['page_heading'] = title
-    return render(request, "userApp/staff/employee_home.html", ctx)
+    return render(request, "userApp/staff/staff_home.html", ctx)
 
 @login_required
 def client_home(request):

@@ -15,8 +15,9 @@ urlpatterns = [
     path("logout/", LogoutView.as_view(), name="logout"),
 
     # || Staff/Employee Links ||
-    path("staff/", staff_home, name="staff_home"), # redirects to admin
-    path("employee/", employee_home, name="employee_home"),
+    path("staff/", staff_home, name="staff_home"),
+    path("employee/", employee_home, name="employee_home"),  # redirects to admin
+    path("staff/clients/", view_all_clients, name="view_all_clients"),
 
     # || Client Links ||
 
