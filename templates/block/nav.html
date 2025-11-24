@@ -11,7 +11,7 @@
                     <a href="{% url 'admin:index' %}">Admin</a>
                 {% endif %}
                 <a href="">Dashboard</a>
-                <a href="#">Companies</a>
+                <a href="{% url 'company_staff:company_home' %}">Companies</a>
                 <a href="{% url 'userApp:view_all_clients' %}">Client Contacts</a>
                 <a href="#">Tickets</a>
                 {% if request.user.role == "OWNER" %}

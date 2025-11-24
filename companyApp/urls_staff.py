@@ -1,19 +1,19 @@
 from django.urls import path, reverse_lazy
+from .import views
 from .views import *
 from django.conf import settings
 from django.conf.urls.static import static
-from django.contrib.auth.views import LogoutView
 
 # All urls are at base/staff/companies
 
-app_name = "companyApp_staff"
+app_name = "company_staff"
 
 urlpatterns = [
     #  || General Links ||
 
 
     # || Staff/Employee Links ||
-
+    path('', views.company_home, name="company_home"),
     
 ]
 if settings.DEBUG:
