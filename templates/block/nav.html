@@ -10,7 +10,7 @@
                 {% if request.user.is_staff %}
                     <a href="{% url 'admin:index' %}">Admin</a>
                 {% endif %}
-                <a href="">Dashboard</a>
+                <a href="{% url 'userApp:staff_home' %}">Dashboard</a>
                 <a href="{% url 'company_staff:company_home' %}">Companies</a>
                 <a href="{% url 'userApp:view_all_clients' %}">Client Contacts</a>
                 <a href="{% url 'ticket_staff:staff_ticket_home' %}">Tickets</a>
@@ -19,7 +19,7 @@
                     <a href="{% url 'onboarding:onboard_home' %}">Onboarding</a>
                 {% endif %}
                 <a href="{% url 'userApp:staff_profile' %}">Profile</a>
-                <form method="post" action="">
+                <form method="post" action="{% url 'userApp:logout' %}">
                     {% csrf_token %}
                     <button type="submit" class="linklike">Logout</button>
                 </form>

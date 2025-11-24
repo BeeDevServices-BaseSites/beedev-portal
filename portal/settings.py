@@ -125,6 +125,10 @@ BRAND_ADDRESS = "Wappingers Falls, NY 12590"
 
 # -------- Auth: shared login + redirects --------
 AUTH_USER_MODEL = 'userApp.User'
+LOGIN_URL = 'userApp:login'
+LOGIN_REDIRECT_URL = 'userApp:post_login'
+# LOGOUT_REDIRECT_URL = 'https://beedev-services.com/'
+LOGOUT_REDIRECT_URL = '/'
 
 # -------- Static files: separate source vs. collect dir --------
 STATIC_URL = '/static/'
