@@ -21,9 +21,6 @@ def validate_file_size(f):
 def ticket_upload_to(instance, filename):
     """
     MEDIA: tickets/<company-or-project>/<ticket-key>/<uuid>.<ext>
-
-    We only have company now (no projectApp.Project), so we use:
-    tickets/<company-slug>/<ticket-key>/YYYY/MM/<uuid>.<ext>
     """
     comp = (
         getattr(instance.message.ticket.company, "slug", None)

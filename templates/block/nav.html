@@ -6,18 +6,19 @@
     <nav class="main_nav">
         {% if request.user.is_authenticated %}
         {# ===== EMPLOYEE SIDE ===== #}
-            {% if request.user.is_staff or request.user.role == "STAFF" or request.user.role == "OWNER" %}
+            {% if request.user.is_staff or request.user.role == "STAFF" or request.user.role == "OWNER" or request.user.role == "ADMIN" %}
                 {% if request.user.is_staff %}
                     <a href="{% url 'admin:index' %}">Admin</a>
                 {% endif %}
                 <a href="">Dashboard</a>
                 <a href="{% url 'company_staff:company_home' %}">Companies</a>
                 <a href="{% url 'userApp:view_all_clients' %}">Client Contacts</a>
-                <a href="#">Tickets</a>
-                {% if request.user.role == "OWNER" %}
-                    <a href="#">Team</a>
+                <a href="{% url 'ticket_staff:staff_ticket_home' %}">Tickets</a>
+                {% if request.user.role == "OWNER" or request.user.role == "ADMIN" %}
+                    <a href="{% url 'userApp:team_home' %}">Team</a>
+                    <a href="{% url 'onboarding:onboard_home' %}">Onboarding</a>
                 {% endif %}
-                <a href="#">Profile</a>
+                <a href="{% url 'userApp:staff_profile' %}">Profile</a>
                 <form method="post" action="">
                     {% csrf_token %}
                     <button type="submit" class="linklike">Logout</button>

@@ -1,4 +1,5 @@
 from django.urls import path, reverse_lazy
+from . import views
 from .views import *
 from django.conf import settings
 from django.conf.urls.static import static
@@ -13,7 +14,7 @@ urlpatterns = [
 
 
     # || Staff/Employee Links ||
-
+    path('', views.staff_ticket_home, name="staff_ticket_home")
 
     
 ]

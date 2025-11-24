@@ -52,3 +52,15 @@ def view_all_clients(request):
     ctx.update(base_ctx(request, title=title))
     ctx['page_heading'] = title
     return render(request, "userApp/staff/view_all_contacts.html", ctx)
+
+@login_required
+def team_home(request):
+    user = request.user
+    if not _allowed_upper_management(request.user):
+        raise PermissionDenied("Not allowed")
+    
+    title = 'Team Admin'
+    ctx = {"user_obj": user, }
+    ctx.update(base_ctx(request, title=title))
+    ctx['page_heading'] = title
+    return render(request, "userApp/staff/team_home.html", ctx)

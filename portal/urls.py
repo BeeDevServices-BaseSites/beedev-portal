@@ -20,9 +20,9 @@ urlpatterns = [
     # Staff
     path('admin/', admin.site.urls),
     path('staff/companies/', include(('companyApp.urls_staff', 'company_staff'), namespace='company_staff')),
-    # path('staff/onboarding/', include(('onboardingApp.urls_', 'onboarding'), namespace='onboarding')),
+    path('staff/onboarding/', include(('onboardingApp.urls', 'onboarding'), namespace='onboarding')),
     path('staff/prospects/', include(('prospectApp.urls', 'prospects'), namespace='prospects')),
-    # path('staff/tickets/', include(('ticketApp.urls_staff', 'ticket_staff'), namespace='ticket_staff')),
+    path('staff/tickets/', include(('ticketApp.urls_staff', 'ticket_staff'), namespace='ticket_staff')),
 
 
     # Clients

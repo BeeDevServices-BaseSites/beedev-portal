@@ -18,6 +18,8 @@ urlpatterns = [
     path("staff/", staff_home, name="staff_home"),
     path("employee/", employee_home, name="employee_home"),  # redirects to admin
     path("staff/clients/", view_all_clients, name="view_all_clients"),
+    path("staff/team/", team_home, name="team_home"),
+    path("staff/profile/", staff_profile, name="staff_profile"),
 
     # || Client Links ||
 
