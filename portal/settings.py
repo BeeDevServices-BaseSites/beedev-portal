@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'ticketApp.apps.TicketappConfig',
     'prospectApp.apps.ProspectappConfig',
     'announceApp.apps.AnnounceappConfig',
+    'onboardingApp.apps.OnboardingappConfig',
     'core.apps.CoreConfig',
 ]
 
