@@ -4,7 +4,7 @@ from .views import *
 from django.conf import settings
 from django.conf.urls.static import static
 
-# All urls are at base/prospects
+# All urls are at base/staff/clients
 
 app_name = "prospects"
 
@@ -14,9 +14,9 @@ urlpatterns = [
 
     # || Staff/Employee Links ||
     path("new/", views.add_prospect, name="add_prospect"),
-    path("<int:pk>/", views.view_prospect, name="prospect_detail"),
-    path("<int:pk>/edit/", views.edit_prospect, name="prospect_edit"),
-    path("<int:pk>/status/", views.update_prospect_status, name="prospect_status"),
+    path("client/<int:pk>/", views.view_prospect, name="prospect_detail"),
+    path("client/<int:pk>/edit/", views.edit_prospect, name="prospect_edit"),
+    path("client/<int:pk>/status/", views.update_prospect_status, name="prospect_status"),
 
 ]
 if settings.DEBUG:

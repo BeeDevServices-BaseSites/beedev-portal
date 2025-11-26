@@ -11,9 +11,6 @@ from core.utils.context import base_ctx
 from ..models import Prospect, ProspectNote
 from ..forms import (
     ProspectForm,
-    ProspectEditForm,
-    ProspectStatusForm,
-    ProspectNoteQuickForm,
 )
 from userApp.models import User
 
@@ -22,7 +19,7 @@ from userApp.models import User
 # Permission helpers
 # -------------------------------------------------------------------
 
-def _allowed_prospect_staff(u: User) -> bool:
+def _allowed_staff(u: User) -> bool:
     return u.is_active and u.role in {
         User.Roles.OWNER,
         User.Roles.ADMIN,
@@ -36,18 +33,20 @@ def _allowed_prospect_staff(u: User) -> bool:
 
 @login_required
 def add_prospect(request):
-    if not _allowed_prospect_staff(request.user):
+    user = request.user
+    if not _allowed_staff(user):
         raise PermissionDenied("Not allowed")
 
     if request.method == "POST":
         form = ProspectForm(request.POST)
         if form.is_valid():
             prospect: Prospect = form.save(commit=False)
-            prospect.created_by = request.user
+            prospect.created_by = user
+            prospect.updated_by = user
             prospect.save()
             messages.success(request, "Prospect added successfully.")
 
-            return redirect("prospects:prospect_edit", pk=prospect.pk)
+            return redirect("userApp:view_all_clients")
         else:
             messages.error(request, "Please fix the errors below.")
     else:
@@ -59,7 +58,7 @@ def add_prospect(request):
     }
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title
-    return render(request, "prospectApp/prospect_form.html", ctx)
+    return render(request, "prospectApp/add_prospect.html", ctx)
 
 
 # -------------------------------------------------------------------
@@ -68,7 +67,7 @@ def add_prospect(request):
 
 @login_required
 def view_prospect(request, pk: int):
-    if not _allowed_prospect_staff(request.user):
+    if not _allowed_staff(request.user):
         raise PermissionDenied("Not allowed")
 
     prospect = get_object_or_404(Prospect, pk=pk)
@@ -98,7 +97,7 @@ def view_prospect(request, pk: int):
 
 @login_required
 def edit_prospect(request, pk: int):
-    if not _allowed_prospect_staff(request.user):
+    if not _allowed_staff(request.user):
         raise PermissionDenied("Not allowed")
 
     prospect = get_object_or_404(Prospect, pk=pk)
@@ -142,7 +141,7 @@ def edit_prospect(request, pk: int):
 @login_required
 @transaction.atomic
 def update_prospect_status(request, pk: int):
-    if not _allowed_prospect_staff(request.user):
+    if not _allowed_staff(request.user):
         raise PermissionDenied("Not allowed")
 
     prospect = get_object_or_404(Prospect, pk=pk)

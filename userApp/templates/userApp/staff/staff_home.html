@@ -9,7 +9,12 @@
     <h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
 
     <div class="dash">
-        
+        <div class="metrics">
+            <h3>Active Companies:  {{dash.metrics.total_companies}}</h3>
+            <h3>Active Prospects:  {{dash.metrics.total_prospects}}</h3>
+            <h3>Open Tickets:  {{dash.metrics.open_tickets}}</h3>
+            <h3>My Open Tickets:  {{dash.metrics.my_open_tickets}}</h3>
+        </div>
     </div>
     
 

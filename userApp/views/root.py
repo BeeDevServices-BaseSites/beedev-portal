@@ -4,7 +4,15 @@ from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from core.utils.context import CommonContextMixin, base_ctx
 from django.db.models import Prefetch, Max
+from django.db.models import Q, Count
+from django.utils import timezone
+
+
 from ..models import User
+from companyApp.models import Company
+from prospectApp.models import Prospect
+from ticketApp.models import Ticket
+from onboardingApp.models import OnboardingList, OnboardingListItem
 import logging
 log = logging.getLogger(__name__)
 
@@ -46,15 +54,34 @@ def staff_home(request):
     if not _allowed_all_staff(request.user):
         return redirect("userApp:client_home")
     
-    users = User.objects.all()
-    
-    if _allowed_management(request.user):
-        dash = {"users": users}
+    today = timezone.now()
+    total_companies = Company.objects.filter(status__in=[Company.Status.PROSPECT, Company.Status.ACTIVE]).count()
 
-    else: 
-        dash = {}
-        
-    ctx = {"user_obj": user, "read_only": True, 'dash': dash}
+    total_prospects = Prospect.objects.exclude(status=Prospect.Status.CLOSED_LOST).count()
+
+    open_tickets = Ticket.objects.filter(status__in=[Ticket.Status.NEW, Ticket.Status.OPEN, Ticket.Status.INPROGRESS, Ticket.Status.PENDING]).count()
+
+    my_open_tickets = Ticket.objects.filter(assigned_to=user, status__in=[Ticket.Status.NEW, Ticket.Status.OPEN, Ticket.Status.INPROGRESS, Ticket.Status.PENDING,],).count()
+
+    prospects_needing_followup = (Prospect.objects.filter(Q(next_follow_up_at__lte=today) | Q(next_follow_up_at__isnull=True),).exclude(status__in=[Prospect.Status.WON, Prospect.Status.CLOSED_LOST]).order_by("next_follow_up_at", "full_name", "company_name")[:10])
+
+    recent_companies = Company.objects.order_by("-updated_at")[:10]
+
+    my_onboarding_items = (OnboardingListItem.objects.select_related("onboarding_list", "onboarding_list__company", "onboarding_list__staff_user").filter(is_completed=False, onboarding_list__is_archived=False,).order_by("onboarding_list__created_at", "sort_order")[:10])
+
+    dash = {
+        "metrics": {
+            "total_companies": total_companies,
+            "total_prospects": total_prospects,
+            "open_tickets": open_tickets,
+            "my_open_tickets": my_open_tickets,
+        },
+        "prospects_needing_followup": prospects_needing_followup,
+        "recent_companies": recent_companies,
+        "my_onboarding_items": my_onboarding_items,
+    }
+
+    ctx = {"user_obj": user, "read_only": True, "dash": dash}
     title = "BeeDev Services Work Dashboard"
     ctx.update(base_ctx(request, title=title))
     ctx['page_heading'] = title
