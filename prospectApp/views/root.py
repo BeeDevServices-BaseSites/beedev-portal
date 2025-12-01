@@ -185,69 +185,42 @@ def update_prospect_status(request, pk: int):
                 messages.success(request, "Note added to prospect history.")
 
             new_status = prospect.status
-
-            created_or_updated_company = None
-            company = prospect.linked_company
+            created_company = None
+            onboarding_created = False
+            archived_count = 0
 
             if new_status == Prospect.Status.CONSULT_PENDING:
-                company = prospect.create_or_update_company(actor=request.user)
-
-                updates = []
-                if company.status != Company.Status.PROSPECT:
-                    company.status = Company.Status.PROSPECT
-                    updates.append("status")
-                if company.pipeline_status != Company.PipelineStatus.HOLDING:
-                    company.pipeline_status = Company.PipelineStatus.HOLDING
-                    updates.append("pipeline_status")
-                if company.work_status != Company.WorkStatus.NONE:
-                    company.work_status = Company.WorkStatus.NONE
-                    updates.append("work_status")
-
-                if updates:
-                    company.save(update_fields=updates + ["updated_at"])
-                created_or_updated_company = company
+                created_company = prospect.create_or_update_company(actor=request.user)
+                onboarding_list, onboarding_created = prospect.ensure_client_onboarding_list(
+                    actor=request.user
+                )
 
             elif new_status == Prospect.Status.WON:
-                company = prospect.create_or_update_company(actor=request.user)
+                created_company = prospect.create_or_update_company(actor=request.user)
 
-                updates = []
-                if company.status != Company.Status.ACTIVE:
-                    company.status = Company.Status.ACTIVE
-                    updates.append("status")
-                if company.pipeline_status == Company.PipelineStatus.HOLDING:
-                    company.pipeline_status = Company.PipelineStatus.NEW
-                    updates.append("pipeline_status")
+            elif new_status == Prospect.Status.CLOSED_LOST:
+                archived_count = prospect.archive_onboarding_lists()
 
-                if updates:
-                    company.save(update_fields=updates + ["updated_at"])
-                created_or_updated_company = company
-
-            # elif new_status == Prospect.Status.CLOSED_LOST and company:
-            #     OnboardingList.objects.filter(
-            #         company=company,
-            #         is_archived=False,
-            #     ).update(
-            #         is_archived=True,
-            #         completed_at=timezone.now(),
-            #     )
-
-            if created_or_updated_company is not None:
-                if old_status != new_status:
-                    messages.success(
-                        request,
-                        f"Status updated ({old_status or '-'} → {new_status or '-'}) "
-                        f"and Company '{created_or_updated_company.name}' synced."
-                    )
-                else:
-                    messages.success(
-                        request,
-                        f"Company '{created_or_updated_company.name}' created/updated for this prospect."
-                    )
+            if new_status == Prospect.Status.CONSULT_PENDING and created_company:
+                msg = f"Status updated to Consultation Pending and company '{created_company.name}' set to Prospect/Holding."
+                if onboarding_created:
+                    msg += " Client onboarding checklist created."
+                messages.success(request, msg)
+            elif new_status == Prospect.Status.WON and created_company:
+                messages.success(
+                    request,
+                    f"Prospect marked WON and linked to Company: {created_company.name}",
+                )
+            elif new_status == Prospect.Status.CLOSED_LOST and archived_count:
+                messages.success(
+                    request,
+                    f"Prospect marked Closed/Lost and {archived_count} onboarding list(s) archived.",
+                )
             elif changed_fields:
                 messages.success(
                     request,
                     f"Status/fields updated ({', '.join(changed_fields)}) — "
-                    f"status {old_status or '-'} → {new_status or '-'}"
+                    f"status {old_status or '-'} → {new_status or '-'}",
                 )
             else:
                 messages.info(request, "No changes detected.")

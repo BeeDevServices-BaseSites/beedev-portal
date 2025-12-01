@@ -135,8 +135,8 @@ class Prospect(TimeStamped):
             prospect=self,
             defaults={
                 "name": company_name,
-                "contact_name": contact_name,
-                "contact_email": contact_email,
+                "primary_contact_name": contact_name,
+                "primary_contact_email": contact_email,
                 "phone": self.phone or "",
                 "website": self.website_url or "",
                 "status": Company.Status.PROSPECT,
@@ -174,6 +174,50 @@ class Prospect(TimeStamped):
                 company.save(update_fields=fields_to_update)
 
         return company
+    
+    @transaction.atomic
+    def ensure_client_onboarding_list(self, *, actor=None):
+        from companyApp.models import Company
+        from onboardingApp.models import OnboardingList
+
+        company = self.create_or_update_company(actor=actor)
+
+        existing = OnboardingList.objects.filter(
+            kind=OnboardingList.Kind.CLIENT,
+            company=company,
+            is_archived=False,
+        ).first()
+        if existing:
+            return existing, False
+
+        lst = OnboardingList.objects.create(
+            kind=OnboardingList.Kind.CLIENT,
+            company=company,
+            title=f"Client Onboarding – {company.name}",
+            notes="",
+            created_for=actor,
+            visible_to_subject=False,
+            management_only=True,
+        )
+        lst.populate_from_templates()
+        return lst, True
+    
+    @transaction.atomic
+    def archive_onboarding_lists(self):
+        from onboardingApp.models import OnboardingList
+
+        company = getattr(self, "company", None)
+        if not company:
+            return 0
+
+        qs = OnboardingList.objects.filter(
+            company=company,
+            is_archived=False,
+        )
+        count = qs.count()
+        if count:
+            qs.update(is_archived=True, completed_at=timezone.now())
+        return count
 
     # -------------------------------------------------------------------
     # Helper: create PortalInvite (used by your 'Send Invite' button)

@@ -20,7 +20,7 @@
         </tr>
         {% for p in prospects %}
             <tr>
-                <td><a href="{% url 'prospects:view_one_prospect' p.pk %}">{{p.company_name}}</a></td>
+                <td><a href="{% url 'prospects:prospect_detail' p.pk %}">{{p.company_name}}</a></td>
                 <td>{{p.status}}</td>
                 <td>{{p.last_contacted_at}}</td>
             </tr>
@@ -41,7 +41,7 @@
         </tr>
         {% for c in companies %}
             <tr>
-                <td><a href="{% url 'company_staff:company_detail' c.pk %}">{{ c.name }}</a></td>
+                <td><a href="#">{{ c.name }}</a></td>
                 <td>{{c.status}}</td>
                 <td>{{c.pipeline_status}}</td>
             </tr>
