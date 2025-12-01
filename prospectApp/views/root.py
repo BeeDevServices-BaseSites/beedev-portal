@@ -6,13 +6,19 @@ from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect, render, get_object_or_404
 from django.urls import reverse
 from django.db import transaction
+from django.utils import timezone
 
 from core.utils.context import base_ctx
 from ..models import Prospect, ProspectNote
 from ..forms import (
     ProspectForm,
+    ProspectEditForm,
+    ProspectStatusForm,
+    ProspectNoteQuickForm,
 )
 from userApp.models import User
+from companyApp.models import Company
+# from onboardingApp.models import OnboardingList
 
 
 # -------------------------------------------------------------------
@@ -45,7 +51,6 @@ def add_prospect(request):
             prospect.updated_by = user
             prospect.save()
             messages.success(request, "Prospect added successfully.")
-
             return redirect("userApp:view_all_clients")
         else:
             messages.error(request, "Please fix the errors below.")
@@ -53,9 +58,7 @@ def add_prospect(request):
         form = ProspectForm()
 
     title = "Add Prospect"
-    ctx = {
-        "form": form,
-    }
+    ctx = {"form": form}
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title
     return render(request, "prospectApp/add_prospect.html", ctx)
@@ -158,7 +161,11 @@ def update_prospect_status(request, pk: int):
             prospect.updated_by = request.user
             if changed_fields:
                 try:
-                    prospect.save(update_fields=list(set(changed_fields + ["updated_by", "updated_at"])))
+                    prospect.save(
+                        update_fields=list(
+                            set(changed_fields + ["updated_by", "updated_at"])
+                        )
+                    )
                 except TypeError:
                     prospect.save()
             else:
@@ -179,15 +186,63 @@ def update_prospect_status(request, pk: int):
 
             new_status = prospect.status
 
-            created_company = None
-            if new_status == Prospect.Status.WON:
-                created_company = prospect.create_or_update_company(actor=request.user)
+            created_or_updated_company = None
+            company = prospect.linked_company
 
-            if created_company is not None:
-                messages.success(
-                    request,
-                    f"Prospect marked WON and linked to Company: {created_company.name}"
-                )
+            if new_status == Prospect.Status.CONSULT_PENDING:
+                company = prospect.create_or_update_company(actor=request.user)
+
+                updates = []
+                if company.status != Company.Status.PROSPECT:
+                    company.status = Company.Status.PROSPECT
+                    updates.append("status")
+                if company.pipeline_status != Company.PipelineStatus.HOLDING:
+                    company.pipeline_status = Company.PipelineStatus.HOLDING
+                    updates.append("pipeline_status")
+                if company.work_status != Company.WorkStatus.NONE:
+                    company.work_status = Company.WorkStatus.NONE
+                    updates.append("work_status")
+
+                if updates:
+                    company.save(update_fields=updates + ["updated_at"])
+                created_or_updated_company = company
+
+            elif new_status == Prospect.Status.WON:
+                company = prospect.create_or_update_company(actor=request.user)
+
+                updates = []
+                if company.status != Company.Status.ACTIVE:
+                    company.status = Company.Status.ACTIVE
+                    updates.append("status")
+                if company.pipeline_status == Company.PipelineStatus.HOLDING:
+                    company.pipeline_status = Company.PipelineStatus.NEW
+                    updates.append("pipeline_status")
+
+                if updates:
+                    company.save(update_fields=updates + ["updated_at"])
+                created_or_updated_company = company
+
+            # elif new_status == Prospect.Status.CLOSED_LOST and company:
+            #     OnboardingList.objects.filter(
+            #         company=company,
+            #         is_archived=False,
+            #     ).update(
+            #         is_archived=True,
+            #         completed_at=timezone.now(),
+            #     )
+
+            if created_or_updated_company is not None:
+                if old_status != new_status:
+                    messages.success(
+                        request,
+                        f"Status updated ({old_status or '-'} → {new_status or '-'}) "
+                        f"and Company '{created_or_updated_company.name}' synced."
+                    )
+                else:
+                    messages.success(
+                        request,
+                        f"Company '{created_or_updated_company.name}' created/updated for this prospect."
+                    )
             elif changed_fields:
                 messages.success(
                     request,

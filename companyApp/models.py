@@ -41,6 +41,7 @@ class Company(models.Model):
         CONVERTED_PROSPECT = "CONVERTED_PROSPECT", "Converted Prospect"
         ACTIVE = "ACTIVE", "Active"
         INACTIVE = "INACTIVE", "Inactive"
+        LOST = "LOST", "Lost"
 
     class PipelineStatus(models.TextChoices):
         NEW = "NEW", "New"
@@ -49,6 +50,7 @@ class Company(models.Model):
         ONGOING = "ONGOING", "On Going"
         FINISHED = "FINISHED", "Finished"
         INACTIVE = "INACTIVE", "Inactive"
+        LOST = "LOST", "Lost"
 
     class WorkStatus(models.TextChoices):
         NONE = "NONE", "Not Started"

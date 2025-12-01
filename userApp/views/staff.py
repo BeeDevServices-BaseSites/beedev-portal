@@ -8,6 +8,7 @@ from django.urls import reverse
 from ..models import User
 from prospectApp.models import Prospect
 from companyApp.models import Company, CompanyMember
+from onboardingApp.models import OnboardingList
 
 
 # -------------------------------------------------------------------
@@ -27,6 +28,8 @@ def view_all_clients(request):
     user = request.user
     if not _allowed_staff(request.user):
         raise PermissionDenied("Not allowed")
+    
+    onboarding = OnboardingList.objects.filter(kind="CLIENT").exclude(is_archived=True)
     
     contacts = (
         User.objects
@@ -48,7 +51,7 @@ def view_all_clients(request):
     all = Prospect.objects.all()
     print(all)
     title = 'Contacts Admin'
-    ctx = {"user_obj": user, "contacts": contacts, "prospects": prospects, "won": won, "lost": lost,}
+    ctx = {"user_obj": user, "contacts": contacts, "prospects": prospects, "won": won, "lost": lost, "onboarding": onboarding}
     ctx.update(base_ctx(request, title=title))
     ctx['page_heading'] = title
     return render(request, "userApp/staff/view_all_contacts.html", ctx)

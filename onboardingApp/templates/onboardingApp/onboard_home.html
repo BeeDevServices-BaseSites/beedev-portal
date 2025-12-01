@@ -8,4 +8,65 @@
   </head>
   <h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
 
+  <div class="mini_menu">
+    <h2><a href="{% url 'userApp:staff_home' %}">Dashboard</a></h2>
+    <h2><a href="#" class="icon_link"><img src="{% static 'images/hex_plus.png' %}" alt="icon" class="icon"><span>Create Onboarding List</span></a></h2>
+  </div>
+
+  <div class="detail">
+    <h3>Client Onboarding Lists</h3>
+    <table class="entry alt_entry">
+      <tr>
+        <th>Title</th>
+        <th>Company</th>
+      </tr>
+      {% for c in client %}
+        <tr>
+
+        </tr>
+      {% empty %}
+        <tr>
+          <td class="blank" colspan="2">No Current Lists</td>
+        </tr>
+      {% endfor %}
+    </table>
+  </div>
+  <div class="detail">
+    <h3>Staff Onboarding Lists</h3>
+    <table class="entry alt_entry">
+      <tr>
+        <th>Title</th>
+        <th>Staff</th>
+      </tr>
+      {% for s in staff %}
+        <tr>
+
+        </tr>
+      {% empty %}
+        <tr>
+          <td class="blank" colspan="2">No Current Lists</td>
+        </tr>
+      {% endfor %}
+    </table>
+  </div>
+  <div class="detail">
+    <h3>Archived Lists</h3>
+    <table class="entry alt_entry">
+      <tr>
+        <th>Title</th>
+        <th>Staff/Client</th>
+        <th>Completed Date</th>
+      </tr>
+      {% for a in archived %}
+        <tr>
+
+        </tr>
+      {% empty %}
+        <tr>
+          <td class="blank" colspan="3">No Archived Lists</td>
+        </tr>
+      {% endfor %}
+    </table>
+  </div>
+
 {% endblock content %}

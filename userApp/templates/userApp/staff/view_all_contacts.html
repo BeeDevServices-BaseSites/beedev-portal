@@ -39,16 +39,18 @@
                 <th>Name</th>
                 <th>Company Name</th>
                 <th>Prospect Status</th>
+                <th>Onboarding List</th>
             </tr>
             {% for w in won %}
                 <tr>
                     <td><a href="{% url 'prospects:view_one_prospect' w.pk %}">{{w.full_name}}</a></td>
                     <td>{{w.company_name}}</td>
                     <td>{{w.status}}</td>
+                    <td></td>
                 </tr>
             {% empty %}
             <tr>
-                <td class="blank" colspan="3">No Won Clients found</td>
+                <td class="blank" colspan="4">No Won Clients found</td>
             </tr>
             {% endfor %}
         </table>
