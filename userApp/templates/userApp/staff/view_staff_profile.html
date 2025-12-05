@@ -3,41 +3,34 @@
 {% load page_title user_extras %}
 
 {% block content %}
-    <head>
-        <link rel="stylesheet" href="{% static 'css/user.css'%}?v={% now 'U' %}">
-    </head>
+  <head>
+    <link rel="stylesheet" href="{% static 'css/user.css'%}?v={% now 'U' %}">
+  </head>
   <h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
-<div class="mini_menu">
-    <h2><a href="{% url 'userApp:employee_home' %}">Dashboard</a></h2>
-    <h2><a href="{% url 'userApp:view_all_staff' %}">Team Admin</a></h2>
-</div>
-<div class="mini_menu">
-  <h2><a href="{% url 'userApp:edit_staff_profile' staff.pk %}">Update Profile</a></h2>
-</div>
-  <div class="info">
+    <div class="info">
     <h3>Your information:</h3>
     <table class="entry">
       <tr>
         <th>First Name:</th>
-        <td>{{staff.first_name}}</td>
+        <td>{{user.first_name}}</td>
       </tr>
       <tr>
         <th>Last Name:</th>
-        <td>{{staff.last_name}}</td>
+        <td>{{user.last_name}}</td>
       </tr>
       <tr>
         <th>Username:</th>
-        <td>{{staff.username}}</td>
+        <td>{{user.username}}</td>
       </tr>
       <tr>
-        <th>Personal Email:</th>
-        <td>{{staff.email}}</td>
+        <th>Email:</th>
+        <td>{{user.email}}</td>
       </tr>
       <tr>
         <th>Discord:</th>
         {% if profile.discord_handle %}
           <td>{{profile.discord_handle}}</td>
-        {% else%}
+        {% else %}
           <td>N/A</td>
         {% endif %}
       </tr>

@@ -9,7 +9,6 @@
 <h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
 <div class="mini_menu">
     <h2><a href="{% url 'userApp:employee_home' %}">Dashboard</a></h2>
-    <h2><a href="{% url 'company_staff:add_company' %}" class="icon_link"><img src="{% static 'images/hex_plus.png' %}" alt="icon" class="icon"><span>Add New Company</span></a></h2>
 </div>
 <div class="detail">
     <h3>Prospects</h3>
@@ -21,7 +20,7 @@
         </tr>
         {% for p in prospects %}
             <tr>
-                <td><a href="{% url 'prospects:view_one_prospect' p.pk %}">{{p.company_name}}</a></td>
+                <td><a href="{% url 'prospects:prospect_detail' p.pk %}">{{p.company_name}}</a></td>
                 <td>{{p.status}}</td>
                 <td>{{p.last_contacted_at}}</td>
             </tr>
@@ -42,7 +41,7 @@
         </tr>
         {% for c in companies %}
             <tr>
-                <td><a href="{% url 'company_staff:company_detail' c.pk %}">{{ c.name }}</a></td>
+                <td><a href="#">{{ c.name }}</a></td>
                 <td>{{c.status}}</td>
                 <td>{{c.pipeline_status}}</td>
             </tr>

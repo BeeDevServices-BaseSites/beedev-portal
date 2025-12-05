@@ -1,5 +1,4 @@
 from django.urls import path, reverse_lazy
-# from . import views
 from .views import *
 from django.conf import settings
 from django.conf.urls.static import static
@@ -16,19 +15,14 @@ urlpatterns = [
     path("logout/", LogoutView.as_view(), name="logout"),
 
     # || Staff/Employee Links ||
-    path("staff/", staff_home, name="staff_home"), # redirects to admin
-    path("employee/", employee_home, name="employee_home"),
-    path("employee/profile/", view_employee_profile, name="view_employee_profile"),
-    path("team/", view_all_staff, name="view_all_staff"),
-    path("team/add/", add_staff, name="add_staff"),
-    path("team/<int:pk>/", view_staff_profile, name="profile_detail"),
-    path("team/<int:pk>/edit", edit_staff_profile, name="edit_staff_profile"),
-    path("clients/", view_all_clients, name="view_all_clients"),
-    path("clients/<int:pk>/", view_client_profile, name="client_profile_staff"),
+    path("staff/", staff_home, name="staff_home"),
+    path("employee/", employee_home, name="employee_home"),  # redirects to admin
+    path("staff/clients/", view_all_clients, name="view_all_clients"),
+    path("staff/team/", team_home, name="team_home"),
+    path("staff/profile/", staff_profile, name="staff_profile"),
 
     # || Client Links ||
-    path("client/", client_home, name="client_home"),
-    path("client/profile/", view_client_profile, name="client_profile_me"),
+
     
 ]
 if settings.DEBUG:

@@ -1,31 +1,22 @@
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.views.generic import TemplateView
 from django.shortcuts import render, get_object_or_404, redirect
-from ..models import Company, CompanyContact, CompanyLink
-from ..forms import CompanyForm, CompanyEditForm
-from prospectApp.models import Prospect
-from proposalApp.models import ProposalDraft, DraftItem, Proposal, ProposalEvent
-from userApp.models import User
 from core.utils.context import base_ctx
-from django.core.paginator import Paginator
-from django.db.models import Prefetch, Count, Sum, Q
-from django.contrib import messages
-from django.http import JsonResponse, Http404
-from django.urls import reverse
 
-def ajax_primary_contact(request, pk: int):
-    if not request.user.is_authenticated or not request.user.is_staff:
-        raise Http404()
-    c = get_object_or_404(Company, pk=pk)
-    return JsonResponse({
-        "name":  (c.primary_contact_name or "").strip(),
-        "email": (c.primary_email or "").strip().lower(),
-    })
+from userApp.models import User
+from ..models import Company
+from prospectApp.models import Prospect
+
+# -------------------------------------------------------------------
+# Permission Helpers
+# -------------------------------------------------------------------
 
 def _allowed_staff(u: User) -> bool:
-    return u.is_active and u.role in {User.Roles.EMPLOYEE, User.Roles.ADMIN, User.Roles.OWNER}
+    return u.is_active and u.role in {User.Roles.STAFF, User.Roles.ADMIN, User.Roles.OWNER}
 
+# -------------------------------------------------------------------
+# Main Functions
+# -------------------------------------------------------------------
 
 @login_required
 def company_home(request):
@@ -41,99 +32,3 @@ def company_home(request):
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title
     return render(request, "company_staff/company_home.html", ctx)
-
-@login_required
-def view_all_companies(request):
-    user = request.user
-    if not _allowed_staff(request.user):
-        raise PermissionDenied("Not allowed")
-    
-    q = (request.GET.get("q") or "").strip()
-    companies = Company.objects.all()
-    if q:
-        companies = companies.filter(name__icontains=q)
-
-    companies = companies.order_by("name")
-    paginator = Paginator(companies, 50)
-    page_obj = paginator.get_page(request.GET.get("page"))
-    
-    title = "Company List"
-    ctx = {"user_obj": user, "read_only": True, "page_obj": page_obj}
-    ctx.update(base_ctx(request, title=title))
-    ctx["page_heading"] = title
-    return render(request, "company_staff/view_all.html", ctx)
-
-@login_required
-def view_company_detail(request, pk: int):
-    user = request.user
-    if not _allowed_staff(request.user):
-        raise PermissionDenied("Not allowed")
-    
-    company = get_object_or_404(Company, pk=pk)
-    contacts = CompanyContact.objects.filter(company=company).order_by("name")
-    links = CompanyLink.objects.filter(company=company).order_by("id")
-
-    drafts = (company.pricing_drafts.select_related("discount", "estimate_tier", "created_by").prefetch_related(Prefetch("items", queryset=DraftItem.objects.select_related("job_rate","base_setting","catalog_item").order_by("sort_order","pk"))).order_by("-updated_at"))
-
-    proposals = (company.simple_proposals.select_related("created_by").prefetch_related("line_items", "applied_discounts", "recipients", "events").order_by("created_at"))
-
-    proposal_stats = proposals.aggregate(count=Count("id"), signed=Count("id", filter=Q(signed_at__isnull=False)), pending=Count("id", filter=Q(signed_at__isnull=True)), total_amount=Sum("amount_total"))
-
-    recent_events = (ProposalEvent.objects.filter(proposal__company=company).select_related("proposal", "actor").order_by("-at")[:10])
-
-    title = f"{company.name} - Details"
-    ctx = {"user_obj": user, "read_only": True, "company": company, "contacts":contacts, "links": links, "drafts": drafts, "proposals": proposals, "proposal_stats": proposal_stats, "recent_events": recent_events}
-    ctx.update(base_ctx(request, title=title))
-    ctx["page_heading"] = title
-    return render(request, "company_staff/view_company_detail.html", ctx)
-
-@login_required
-def add_company(request):
-    user = request.user
-    if not _allowed_staff(request.user):
-        raise PermissionDenied("Not allowed")
-    
-    if request.method == "POST":
-        form = CompanyForm(request.POST)
-        if form.is_valid():
-            company = form.save(commit=False)
-            if hasattr(company, "created_by"):
-                company.created_by = user
-            company.save()
-            messages.success(request, "Company added successfully.")
-
-            return redirect("company_staff:company_home")
-        else:
-            messages.error(request, "Please fix the errors below.")
-    else:
-        form = CompanyForm()
-    title = "Add Company"
-    ctx = {"form": form}
-    ctx.update(base_ctx(request, title=title))
-    ctx["page_heading"] = title
-    return render(request, "company_staff/add_company_form.html", ctx)
-
-@login_required
-def edit_company(request, pk: int):
-    if not _allowed_staff(request.user):
-        raise PermissionDenied("Not allowed")
-    
-    company = get_object_or_404(Company, pk=pk)
-
-    if request.method == "POST":
-        form = CompanyEditForm(request.POST, instance=company)
-        if form.is_valid():
-            obj = form.save(commit=False)
-            if hasattr(obj, "contact_email") and obj.contact_email:
-                obj.contact_email = obj.contact_email.strip().lower()
-            obj.save()
-            messages.success(request, "Company updated.")
-            return redirect(reverse("company_staff:company_detail", args=[company.pk]))
-    else:
-        form = CompanyEditForm(instance=company)
-    
-    title = f"Update {company.name}"
-    ctx = {"user_obj": request.user, "form": form, "company": company,}
-    ctx.update(base_ctx(request, title=title))
-    ctx["page_heading"] = title
-    return render(request, "company_staff/company_edit.html", ctx)

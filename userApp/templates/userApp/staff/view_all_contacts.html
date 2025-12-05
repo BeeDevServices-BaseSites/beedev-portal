@@ -8,7 +8,7 @@
     </head>
     <h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
     <div class="mini_menu">
-        <h2><a href="{% url 'userApp:employee_home' %}">Dashboard</a></h2>
+        <h2><a href="{% url 'userApp:staff_home' %}">Dashboard</a></h2>
         <h2><a href="{% url 'prospects:add_prospect' %}" class="icon_link"><img src="{% static 'images/hex_plus.png' %}" alt="icon" class="icon"><span>Add New Prospect</span></a></h2>
     </div>
     <div class="detail">
@@ -21,7 +21,7 @@
             </tr>
             {% for p in prospects %}
                 <tr>
-                    <td><a href="{% url 'prospects:view_one_prospect' p.pk %}">{{p.full_name}}</a></td>
+                    <td><a href="{% url 'prospects:prospect_detail' p.pk %}">{{p.full_name}}</a></td>
                     <td>{{p.company_name}}</td>
                     <td>{{p.status}}</td>
                 </tr>
@@ -39,16 +39,18 @@
                 <th>Name</th>
                 <th>Company Name</th>
                 <th>Prospect Status</th>
+                <th>Onboarding List</th>
             </tr>
             {% for w in won %}
                 <tr>
                     <td><a href="{% url 'prospects:view_one_prospect' w.pk %}">{{w.full_name}}</a></td>
                     <td>{{w.company_name}}</td>
                     <td>{{w.status}}</td>
+                    <td></td>
                 </tr>
             {% empty %}
             <tr>
-                <td class="blank" colspan="3">No Won Clients found</td>
+                <td class="blank" colspan="4">No Won Clients found</td>
             </tr>
             {% endfor %}
         </table>
@@ -71,27 +73,6 @@
                 <tr>
                     <td class="blank" colspan="3">No clients found</td>
                 </tr>
-            {% endfor %}
-        </table>
-    </div>
-    <div class="detail">
-        <h3>DNC</h3>
-        <table class="entry alt_entry">
-            <tr>
-                <th>Name</th>
-                <th>Company Name</th>
-                <th>Prospect Status</th>
-            </tr>
-            {% for d in dnc %}
-                <tr>
-                    <td><a href="{% url 'prospects:view_one_prospect' d.pk %}">{{d.full_name}}</a></td>
-                    <td>{{d.company_name}}</td>
-                    <td>{{d.status}}</td>
-                </tr>
-            {% empty %}
-            <tr>
-                <td class="blank" colspan="3">No Do Not Contact Clients</td>
-            </tr>
             {% endfor %}
         </table>
     </div>

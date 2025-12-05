@@ -10,7 +10,7 @@ def _audiences_for_user(user) -> list[str]:
     if not getattr(user, "is_authenticated", False):
         return ["PUBLIC", "ALL"]
     try:
-        emp_roles = {user.Roles.EMPLOYEE, user.Roles.ADMIN, user.Roles.OWNER, user.Roles.HR}
+        emp_roles = {user.Roles.STAFF, user.Roles.OWNER}
         role = getattr(user, "role", None)
         if role in emp_roles:
             return ["EMPLOYEE", "ALL"]

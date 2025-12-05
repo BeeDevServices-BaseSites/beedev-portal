@@ -1,138 +1,151 @@
-# prospects/admin.py
-from urllib.parse import urlparse
+# prospectApp/admin.py
+
 from django.contrib import admin, messages
 from django.db import transaction
-from django.utils import timezone
-from .models import Prospect
-from companyApp.models import Company, CompanyContact
 
-def _name_from_url(url: str) -> str | None:
-    if not url:
-        return None
-    netloc = urlparse(url).netloc or url
-    netloc = netloc.lower()
-    if netloc.startswith("www."):
-        netloc = netloc[4:]
-    base = netloc.split(":")[0]
-    label = base.split(".")[0]
-    return label.replace("-", " ").title() if label else None
+from .models import Prospect, ProspectNote
 
-def _best_company_name(p: Prospect) -> str:
-    return (
-        (p.company_name or "").strip()
-        or _name_from_url(p.website_url)
-        or (p.full_name or "").strip()
-        or (p.email.split("@")[0] if p.email else "")
-        or f"Prospect {p.pk}"
-    )
 
-def _normalize(url: str) -> str:
-    return (url or "").strip().rstrip("/").lower()
+# =======================================================================
+#                         ADMIN ACTIONS
+# =======================================================================
 
-@admin.action(description="Convert to Company (+ primary contact)")
+@admin.action(description="Convert to Company (mark as WON)")
 def convert_to_company(modeladmin, request, queryset):
-    created, updated, contact_new, contact_upd, errors = 0, 0, 0, 0, 0
+    success_count = 0
+    error_count = 0
 
     with transaction.atomic():
-        for p in queryset.select_for_update():
+        for prospect in queryset.select_for_update():
             try:
-                name = _best_company_name(p)
+                company = prospect.create_or_update_company(actor=request.user)
 
-                c = (
-                    Company.objects.filter(name__iexact=name).first()
-                    or (Company.objects.filter(website__iexact=_normalize(p.website_url)).first() if p.website_url else None)
-                    or (Company.objects.filter(primary_email__iexact=p.email).first() if p.email else None)
-                )
+                if hasattr(Prospect.Status, "WON"):
+                    if prospect.status != Prospect.Status.WON:
+                        prospect.status = Prospect.Status.WON
+                        prospect.updated_by = request.user
+                        prospect.save(update_fields=["status", "updated_by", "updated_at"])
 
-                if c is None:
-                    c = Company.objects.create(
-                        name=name,
-                        website=p.website_url or "",
-                        primary_contact_name=p.full_name or "",
-                        primary_email=p.email or "",
-                        phone=p.phone or "",
-                        address_line1=p.address1 or "",
-                        address_line2=p.address2 or "",
-                        city=p.city or "",
-                        state_region=p.state or "",
-                        postal_code=p.postal_code or "",
-                        country=p.country or "USA",
-                        notes=(p.notes or ""),
-                        status=Company.Status.PROSPECT,
-                        pipeline_status=Company.PipelineStatus.NEW,
-                        created_by=getattr(request, "user", None),
-                        first_contact_at=timezone.now().date(),
-                        last_contact_at=timezone.now().date(),
-                    )
-                    created += 1
-                else:
-                    dirty = False
-                    if not c.website and p.website_url:
-                        c.website, dirty = p.website_url, True
-                    if not c.primary_contact_name and p.full_name:
-                        c.primary_contact_name, dirty = p.full_name, True
-                    if not c.primary_email and p.email:
-                        c.primary_email, dirty = p.email, True
-                    if not c.phone and p.phone:
-                        c.phone, dirty = p.phone, True
-                    if not c.address_line1 and p.address1:
-                        c.address_line1, dirty = p.address1, True
-                    if not c.city and p.city:
-                        c.city, dirty = p.city, True
-                    if not c.state_region and p.state:
-                        c.state_region, dirty = p.state, True
-                    if not c.postal_code and p.postal_code:
-                        c.postal_code, dirty = p.postal_code, True
-                    if not c.country and p.country:
-                        c.country, dirty = p.country, True
-                    if (p.notes or "") and (p.notes or "") not in (c.notes or ""):
-                        c.notes = (c.notes or "") + ("\n\n" if c.notes else "") + p.notes
-                        dirty = True
-                    if dirty:
-                        c.save()
-                        updated += 1
-
-                if p.email:
-                    contact, created_contact = CompanyContact.objects.get_or_create(
-                        company=c,
-                        email=p.email,
-                        defaults={
-                            "name": p.full_name or name,
-                            "phone": p.phone or "",
-                            "title": "",
-                            "is_primary": True,
-                            "notes": p.notes or "",
-                        },
-                    )
-                    if created_contact:
-                        contact_new += 1
-                    else:
-                        changed = False
-                        if not contact.name and (p.full_name or name):
-                            contact.name = p.full_name or name; changed = True
-                        if not contact.phone and p.phone:
-                            contact.phone = p.phone; changed = True
-                        if not contact.is_primary:
-                            contact.is_primary = True; changed = True
-                        if changed:
-                            contact.save()
-                            contact_upd += 1
-
-                p.status = Prospect.Status.WON
-                p.save(update_fields=["status", "updated_at"])
+                success_count += 1
 
             except Exception as e:
-                errors += 1
-                messages.error(request, f"{p.email or p.pk}: {e}")
+                error_count += 1
+                messages.error(
+                    request,
+                    f"Error converting prospect {prospect.email or prospect.pk}: {e}",
+                )
 
-    msg = f"Companies created: {created}, updated: {updated}. Contacts created: {contact_new}, updated: {contact_upd}."
-    if errors:
-        msg += f" {errors} failed."
+    msg = f"Prospects processed: {success_count}."
+    if error_count:
+        msg += f" {error_count} failed."
     messages.success(request, msg)
+
+
+# =======================================================================
+#                         INLINES
+# =======================================================================
+
+class ProspectNoteInline(admin.TabularInline):
+    model = ProspectNote
+    extra = 0
+    fields = ("subject", "body_md", "is_pinned", "created_by", "created_at")
+    readonly_fields = ("created_by", "created_at")
+
+    def save_new_objects(self, formset, commit=True):
+        objs = super().save_new_objects(formset, commit=False)
+        request = formset.request
+        for obj in objs:
+            if not obj.created_by:
+                obj.created_by = request.user
+        if commit:
+            for obj in objs:
+                obj.save()
+        return objs
+
+
+# =======================================================================
+#                          PROSPECT ADMIN
+# =======================================================================
 
 @admin.register(Prospect)
 class ProspectAdmin(admin.ModelAdmin):
-    list_display = ("company_name","full_name","email","status","has_website","last_contacted_at","next_follow_up_at","do_not_contact")
-    list_filter  = ("status","do_not_contact","country")
-    search_fields= ("company_name","full_name","email","website_url","tags","notes","city","state")
+    list_display = (
+        "company_name",
+        "full_name",
+        "email",
+        "status",
+        "has_website",
+        "last_contacted_at",
+        "next_follow_up_at",
+        "country",
+    )
+    list_filter = ("status", "country")
+    search_fields = (
+        "company_name",
+        "full_name",
+        "email",
+        "website_url",
+        "tags",
+        "notes",
+        "city",
+        "state",
+    )
+
+    readonly_fields = ("created_at", "updated_at", "created_by", "updated_by")
+
+    fieldsets = (
+        ("Prospect Info", {
+            "fields": (
+                "full_name",
+                "company_name",
+                "email",
+                "phone",
+                "website_url",
+                "sheet_url",
+                "status",
+                "tags",
+                "notes",
+            )
+        }),
+        ("Address", {
+            "fields": (
+                "address1",
+                "address2",
+                "city",
+                "state",
+                "postal_code",
+                "country",
+            )
+        }),
+        ("Follow-up", {
+            "fields": (
+                "last_contacted_at",
+                "next_follow_up_at",
+            )
+        }),
+        ("Audit", {
+            "fields": (
+                "created_by",
+                "updated_by",
+                "created_at",
+                "updated_at",
+            )
+        }),
+    )
+
+    inlines = [ProspectNoteInline]
     actions = [convert_to_company]
+
+    # --- Make created_by / updated_by track who did what ---
+
+    def save_model(self, request, obj, form, change):
+        if not change and not obj.created_by:
+            obj.created_by = request.user
+        else:
+            obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
+
+    def get_formset(self, request, obj=None, **kwargs):
+        formset = super().get_formset(request, obj, **kwargs)
+        formset.request = request
+        return formset

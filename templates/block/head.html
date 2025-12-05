@@ -12,8 +12,5 @@
         <link rel="stylesheet" href="{% static 'css/rootSite.css'%}?v={% now 'U' %}">
         <title>{{title.title}} - BeeDev Services</title>
     </head>
-    {% if DEBUG %}
-        {% include "block/browser_reload.html" %}
-    {% endif %}
     {% endblock head %}
 </html>

@@ -1,5 +1,8 @@
 # ticketApp/models.py
-import os, uuid, datetime
+import os
+import uuid
+import datetime
+
 from django.db import models
 from django.conf import settings
 from django.core.validators import FileExtensionValidator
@@ -9,15 +12,25 @@ from django.utils import timezone
 ALLOWED_FILE_EXTS = ["pdf", "png", "jpg", "jpeg", "webp", "txt", "docx", "xlsx"]
 MAX_FILE_BYTES = 20 * 1024 * 1024  # 20MB
 
+
 def validate_file_size(f):
     if f and f.size and f.size > MAX_FILE_BYTES:
-        raise ValidationError(f"File too large (> {MAX_FILE_BYTES//1024//1024}MB).")
+        raise ValidationError(f"File too large (> {MAX_FILE_BYTES // 1024 // 1024}MB).")
+
 
 def ticket_upload_to(instance, filename):
-    # MEDIA: tickets/<company-or-project>/<ticket-key>/<uuid>.<ext>
-    comp = getattr(instance.message.ticket.company, "slug", None) or f"company-{instance.message.ticket.company_id}"
-    key  = instance.message.ticket.public_key or f"t-{instance.message.ticket_id or 'new'}"
-    ext  = os.path.splitext(filename)[1].lower()
+    """
+    MEDIA: tickets/<company-or-project>/<ticket-key>/<uuid>.<ext>
+    """
+    comp = (
+        getattr(instance.message.ticket.company, "slug", None)
+        or f"company-{instance.message.ticket.company_id}"
+    )
+    key = (
+        instance.message.ticket.public_key
+        or f"t-{instance.message.ticket_id or 'new'}"
+    )
+    ext = os.path.splitext(filename)[1].lower()
     today = datetime.date.today()
     return f"tickets/{comp}/{key}/{today.year}/{today.month:02d}/{uuid.uuid4().hex}{ext}"
 
@@ -44,28 +57,76 @@ class Ticket(models.Model):
         BILLING = "BILLING", "Billing"
         OTHER   = "OTHER",   "Other"
 
-    company      = models.ForeignKey("companyApp.Company", on_delete=models.CASCADE, related_name="tickets")
-    project      = models.ForeignKey("projectApp.Project", null=True, blank=True, on_delete=models.SET_NULL, related_name="tickets")
+    company = models.ForeignKey(
+        "companyApp.Company",
+        on_delete=models.CASCADE,
+        related_name="tickets",
+    )
 
-    customer_user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="tickets_opened")
-    created_by    = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="tickets_created")
-    assigned_to   = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="tickets_assigned")
+    # No project FK anymore in Portal Lite
 
-    public_key   = models.CharField(max_length=24, unique=True, blank=True, help_text="e.g., T-2025-AB12CD34")
-    subject      = models.CharField(max_length=200)
-    description  = models.TextField(blank=True)
+    customer_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="tickets_opened",
+        help_text="The client user who opened this ticket, if any.",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="tickets_created",
+        help_text="Staff user who first created the ticket (or same as customer_user if client-created).",
+    )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="tickets_assigned",
+        help_text="Staff assigned to handle this ticket.",
+    )
 
-    status       = models.CharField(max_length=12, choices=Status.choices, default=Status.NEW)
-    priority     = models.CharField(max_length=10, choices=Priority.choices, default=Priority.MEDIUM)
-    category     = models.CharField(max_length=10, choices=Category.choices, default=Category.OTHER)
+    public_key = models.CharField(
+        max_length=24,
+        unique=True,
+        blank=True,
+        help_text="e.g., T-2025-AB12CD34",
+    )
+    subject = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+
+    status = models.CharField(
+        max_length=12,
+        choices=Status.choices,
+        default=Status.NEW,
+    )
+    priority = models.CharField(
+        max_length=10,
+        choices=Priority.choices,
+        default=Priority.MEDIUM,
+    )
+    category = models.CharField(
+        max_length=10,
+        choices=Category.choices,
+        default=Category.OTHER,
+    )
 
     last_client_reply_at = models.DateTimeField(null=True, blank=True)
-    closed_at    = models.DateTimeField(null=True, blank=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
 
-    watchers     = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name="ticket_watchlist")
+    watchers = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name="ticket_watchlist",
+        help_text="Staff and/or client users who should get notified about updates.",
+    )
 
-    created_at   = models.DateTimeField(auto_now_add=True)
-    updated_at   = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ("-updated_at", "pk")
@@ -94,21 +155,38 @@ class TicketMessage(models.Model):
         STAFF  = "STAFF",  "Staff"
         CLIENT = "CLIENT", "Client"
 
-    ticket      = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name="messages")
-    author      = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="ticket_messages")
-    author_kind = models.CharField(max_length=8, choices=AuthorKind.choices, default=AuthorKind.STAFF)
+    ticket = models.ForeignKey(
+        Ticket,
+        on_delete=models.CASCADE,
+        related_name="messages",
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="ticket_messages",
+    )
+    author_kind = models.CharField(
+        max_length=8,
+        choices=AuthorKind.choices,
+        default=AuthorKind.STAFF,
+    )
 
-    body        = models.TextField(blank=True)
-    is_internal = models.BooleanField(default=False, help_text="If true, client cannot see this message")
+    body = models.TextField(blank=True)
+    is_internal = models.BooleanField(
+        default=False,
+        help_text="If true, client cannot see this message.",
+    )
 
-    created_at  = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ("created_at", "pk")
 
     def __str__(self):
         return f"{self.ticket.public_key}: {self.author_kind} ({'internal' if self.is_internal else 'shared'})"
-    
+
     def clean(self):
         # Clients cannot create internal-only messages
         if self.author_kind == self.AuthorKind.CLIENT and self.is_internal:
@@ -124,13 +202,17 @@ class TicketMessage(models.Model):
 
 
 class TicketAttachment(models.Model):
-    message = models.ForeignKey(TicketMessage, on_delete=models.CASCADE, related_name="attachments")
-    file    = models.FileField(
+    message = models.ForeignKey(
+        TicketMessage,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+    file = models.FileField(
         upload_to=ticket_upload_to,
         validators=[FileExtensionValidator(ALLOWED_FILE_EXTS), validate_file_size],
     )
     original_name = models.CharField(max_length=200, blank=True)
-    uploaded_at   = models.DateTimeField(auto_now_add=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.original_name or os.path.basename(self.file.name)
@@ -145,11 +227,20 @@ class TicketEvent(models.Model):
         ATTACHMENT = "ATTACHMENT", "Attachment"
         CLOSED     = "CLOSED",     "Closed"
 
-    ticket    = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name="events")
-    kind      = models.CharField(max_length=12, choices=Kind.choices)
-    at        = models.DateTimeField(auto_now_add=True)
-    actor     = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
-    data      = models.JSONField(blank=True, null=True)
+    ticket = models.ForeignKey(
+        Ticket,
+        on_delete=models.CASCADE,
+        related_name="events",
+    )
+    kind = models.CharField(max_length=12, choices=Kind.choices)
+    at = models.DateTimeField(auto_now_add=True)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    data = models.JSONField(blank=True, null=True)
 
     class Meta:
         ordering = ("-at", "pk")

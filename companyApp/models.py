@@ -1,19 +1,26 @@
 # companyApp/models.py
-import os, uuid, datetime, re
+import os
+import uuid
+import datetime
+
 from django.db import models
 from django.conf import settings
 from django.core.validators import FileExtensionValidator
 from django.core.exceptions import ValidationError
 from django.templatetags.static import static
 from django.utils.text import slugify
+from django.utils import timezone
 
-# ---------- Validators / helpers ----------
+User = settings.AUTH_USER_MODEL
+
+# ---------- Logo helpers ----------
+
 ALLOWED_LOGO_EXTS = ["jpg", "jpeg", "png", "webp"]
 MAX_LOGO_BYTES = 3 * 1024 * 1024  # 3 MB
 
 def validate_logo_size(f):
     if f.size and f.size > MAX_LOGO_BYTES:
-        raise ValidationError(f"Logo too large (>{MAX_LOGO_BYTES//1024//1024}MB).")
+        raise ValidationError(f"Logo too large (>{MAX_LOGO_BYTES // 1024 // 1024}MB).")
 
 def logo_upload_to(instance, filename):
     ext = os.path.splitext(filename)[1].lower().lstrip(".") or "png"
@@ -27,66 +34,119 @@ def logo_upload_to(instance, filename):
 # =======================================================================
 #                              COMPANY
 # =======================================================================
+
 class Company(models.Model):
     class Status(models.TextChoices):
         PROSPECT = "PROSPECT", "Prospect"
         CONVERTED_PROSPECT = "CONVERTED_PROSPECT", "Converted Prospect"
-        ACTIVE   = "ACTIVE",   "Active"
+        ACTIVE = "ACTIVE", "Active"
         INACTIVE = "INACTIVE", "Inactive"
+        LOST = "LOST", "Lost"
 
     class PipelineStatus(models.TextChoices):
-        NEW         = "NEW",         "New"
-        HOLDING     = "HOLDING",     "Holding"
+        NEW = "NEW", "New"
+        HOLDING = "HOLDING", "Holding"
         IN_PROGRESS = "IN_PROGRESS", "In Progress"
-        ONGOING     = "ONGOING",     "On Going"
-        FINISHED    = "FINISHED",    "Finished"
-        INACTIVE    = "INACTIVE",    "Inactive"
+        ONGOING = "ONGOING", "On Going"
+        FINISHED = "FINISHED", "Finished"
+        INACTIVE = "INACTIVE", "Inactive"
+        LOST = "LOST", "Lost"
 
-    name  = models.CharField(max_length=200, unique=True)
-    slug  = models.SlugField(max_length=220, unique=True, blank=True)
+    class WorkStatus(models.TextChoices):
+        NONE = "NONE", "Not Started"
+        DISCOVERY = "DISCOVERY", "Discovery / Intake"
+        PROPOSAL_SENT = "PROPOSAL_SENT", "Proposal Sent"
+        PROPOSAL_APPROVED = "PROPOSAL_APPROVED", "Proposal Approved"
+        ROAD_MAP_SENT = "ROAD_MAP_SENT", "Road Map Sent"
+        DEPOSIT_INVOICE_SENT = "DEPOSIT_INVOICE_SENT", "Deposit Invoice Sent"
+        DEPOSIT_PAID = "DEPOSIT_PAID", "Deposit Paid"
+        PROJECT_SCHEDULED = "PROJECT_SCHEDULED", "Project Scheduled"
+        DESIGN_STARTED = "DESIGN_STARTED", "Design Started"
+        DESIGN_APPROVED = "DESIGN_APPROVED", "Design Approved"
+        DEVELOPMENT_STARTED = "DEVELOPMENT_STARTED", "Development Started"
+        QA_REVIEW = "QA_REVIEW", "QA / Review"
+        DEVELOPMENT_APPROVED = "DEVELOPMENT_APPROVED", "Development Approved"
+        READY_FOR_LAUNCH = "READY_FOR_LAUNCH", "Ready for Launch"
+        LIVE = "LIVE", "Site Live"
+        FINAL_INVOICE_SENT = "FINAL_INVOICE_SENT", "Final Invoice Sent"
+        FINAL_INVOICE_PAID = "FINAL_INVOICE_PAID", "Final Invoice Paid"
+        RECURRING_INVOICE_SENT = "RECURRING_INVOICE_SENT", "Recurring Invoice Sent"
+        RECURRING_INVOICE_PAID = "RECURRING_INVOICE_PAID", "Recurring Invoice Paid"
+        ON_HOLD = "ON_HOLD", "On Hold"
+
+    name = models.CharField(max_length=200, unique=True)
+    slug = models.SlugField(max_length=220, unique=True, blank=True)
 
     users = models.ManyToManyField(
-        settings.AUTH_USER_MODEL,
-        through="CompanyMembership",
+        User,
+        through="CompanyMember",
         related_name="companies",
         blank=True,
     )
 
     primary_contact_name = models.CharField(max_length=120, blank=True)
-    primary_email        = models.EmailField(blank=True)
-    phone                = models.CharField(max_length=30, blank=True)
+    primary_contact_email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=30, blank=True)
 
     address_line1 = models.CharField(max_length=200, blank=True)
     address_line2 = models.CharField(max_length=200, blank=True)
-    city          = models.CharField(max_length=120, blank=True)
-    state_region  = models.CharField(max_length=120, blank=True)
-    postal_code   = models.CharField(max_length=20, blank=True)
-    country       = models.CharField(max_length=120, blank=True, default="USA")
+    city = models.CharField(max_length=120, blank=True)
+    state_region = models.CharField(max_length=120, blank=True)
+    postal_code = models.CharField(max_length=20, blank=True)
+    country = models.CharField(max_length=120, blank=True, default="USA")
 
     website = models.URLField(blank=True)
 
     logo = models.ImageField(
-        upload_to=logo_upload_to, blank=True, null=True,
+        upload_to=logo_upload_to,
+        blank=True,
+        null=True,
         validators=[FileExtensionValidator(ALLOWED_LOGO_EXTS), validate_logo_size],
-        help_text="PNG/JPEG/WebP, up to 3MB."
+        help_text="PNG/JPEG/WebP, up to 3MB.",
     )
     logo_external_url = models.URLField(
         blank=True,
-        help_text="Optional external logo URL (e.g., Google Drive shared link)."
+        help_text="Optional external logo URL (e.g., Google Drive shared link).",
     )
 
-    status          = models.CharField(max_length=20, choices=Status.choices, default=Status.CONVERTED_PROSPECT)
-    pipeline_status = models.CharField(max_length=20, choices=PipelineStatus.choices, blank=True, default="")
+    consultation_sheet_url = models.URLField(
+        blank=True,
+        help_text="Link to internal consultation / project sheet (BeeDev-only).",
+    )
 
-    consultation_sheet_url = models.URLField(blank=True)
-    first_contact_at = models.DateField(null=True, blank=True)
-    last_contact_at  = models.DateField(null=True, blank=True)
+    status = models.CharField(
+        max_length=24,
+        choices=Status.choices,
+        default=Status.ACTIVE,
+    )
+    pipeline_status = models.CharField(
+        max_length=24,
+        choices=PipelineStatus.choices,
+        blank=True,
+        default=PipelineStatus.NEW,
+    )
+    work_status = models.CharField(
+        max_length=40,
+        choices=WorkStatus.choices,
+        default=WorkStatus.NONE,
+        help_text="Micro status for current work state (e.g., design started, deposit invoice sent).",
+    )
 
-    notes = models.TextField(blank=True)
+    prospect = models.OneToOneField(
+        "prospectApp.Prospect",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="company",
+        help_text="Original prospect record, if applicable.",
+    )
 
     created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True,
-        on_delete=models.SET_NULL, related_name="companies_created",
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="companies_created",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -98,6 +158,7 @@ class Company(models.Model):
             models.Index(fields=["slug"]),
             models.Index(fields=["status"]),
             models.Index(fields=["pipeline_status"]),
+            models.Index(fields=["work_status"]),
         ]
 
     def save(self, *args, **kwargs):
@@ -113,7 +174,7 @@ class Company(models.Model):
 
     def __str__(self):
         return self.name
-    
+
     @property
     def logo_url(self) -> str:
         if getattr(self, "logo_external_url", ""):
@@ -124,244 +185,369 @@ class Company(models.Model):
         except Exception:
             pass
         return static("img/company-logo-placeholder.svg")
-    
+
     @property
     def has_client_users(self) -> bool:
-        from userApp.models import User
-        return self.memberships.filter(
+        from userApp.models import User as AppUser
+        return self.members.filter(
             is_active=True,
-            user__role=User.Roles.CLIENT
+            member_type=CompanyMember.MemberType.CLIENT,
+            user__role=AppUser.Roles.CLIENT,
         ).exists()
-    
 
-class CompanyMembership(models.Model):
-    class Role(models.TextChoices):
-        ACCOUNT_ADMIN = "ACCOUNT_ADMIN", "Account Admin"
-        MANAGER       = "MANAGER",       "Manager"
-        MEMBER        = "MEMBER",        "Member"
-        BILLING_ONLY  = "BILLING_ONLY",  "Billing Only"
-        READ_ONLY     = "READ_ONLY",     "Read Only"
 
-    company = models.ForeignKey("companyApp.Company", on_delete=models.CASCADE, related_name="memberships")
-    user    = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="company_memberships")
+# =======================================================================
+#                          COMPANY MEMBER
+# =======================================================================
 
-    role = models.CharField(max_length=24, choices=Role.choices, default=Role.MEMBER)
+class CompanyMember(models.Model):
+    class MemberType(models.TextChoices):
+        CLIENT = "CLIENT", "Client Contact"
+        STAFF = "STAFF", "Staff"
 
-    can_view_proposals = models.BooleanField(default=False)
-    can_view_invoices  = models.BooleanField(default=False)
-    can_open_tickets   = models.BooleanField(default=True)
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="members",
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="company_memberships",
+    )
 
+    member_type = models.CharField(
+        max_length=10,
+        choices=MemberType.choices,
+        default=MemberType.CLIENT,
+    )
+    is_primary = models.BooleanField(
+        default=False,
+        help_text="Primary point of contact for this company.",
+    )
     is_active = models.BooleanField(default=True)
-    added_at  = models.DateTimeField(auto_now_add=True)
+
+    added_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = [("company", "user")]
+        unique_together = ("company", "user")
         indexes = [
             models.Index(fields=["company", "user", "is_active"]),
-            models.Index(fields=["company", "role"]),
+            models.Index(fields=["company", "member_type"]),
         ]
 
-    def is_admin(self):
-        return self.role in {self.Role.ACCOUNT_ADMIN, self.Role.MANAGER}
+    def __str__(self):
+        return f"{self.user} @ {self.company} ({self.member_type})"
 
 
 # =======================================================================
-#                          COMPANY CONTACT
+#                         PROPOSAL & ROADMAP
 # =======================================================================
-class CompanyContact(models.Model):
-    company   = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="contacts")
-    user      = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True,
-        on_delete=models.SET_NULL, related_name="company_contacts"
+
+class ProposalDocument(models.Model):
+    company = models.OneToOneField(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="proposal_document",
+    )
+    file = models.FileField(upload_to="proposals/")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Proposal for {self.company.name}"
+
+
+class Roadmap(models.Model):
+    company = models.OneToOneField(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="roadmap",
+    )
+    file = models.FileField(
+        upload_to="roadmaps/",
+        blank=True,
+        null=True,
+        help_text="Optional roadmap PDF or document.",
+    )
+    notes = models.TextField(
+        blank=True,
+        help_text="Optional text roadmap / milestones.",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Roadmap for {self.company.name}"
+
+
+# =======================================================================
+#                              AGREEMENTS
+# =======================================================================
+
+class Agreement(models.Model):
+    class Kind(models.TextChoices):
+        MSA = "CSA", "Client Services Agreement"
+        SOW = "SOW", "Statement of Work"
+        NDA = "NDA", "Non-Disclosure Agreement"
+        OTHER = "OTHER", "Other"
+
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "Draft"
+        SENT = "SENT", "Sent for Signature"
+        SIGNED = "SIGNED", "Fully Signed"
+        SUPERSEDED = "SUPERSEDED", "Superseded"
+        TERMINATED = "TERMINATED", "Terminated"
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="agreements",
+    )
+    kind = models.CharField(
+        max_length=12,
+        choices=Kind.choices,
+        default=Kind.SOW,
+    )
+    title = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Optional friendly title (e.g., 'Website Rebuild SOW').",
     )
 
-    name       = models.CharField(max_length=120)
-    email      = models.EmailField(blank=True)
-    phone      = models.CharField(max_length=30, blank=True)
-    title      = models.CharField(max_length=120, blank=True)
-    is_primary = models.BooleanField(default=False)
-    notes      = models.TextField(blank=True)
+    file_signed = models.FileField(
+        upload_to="agreements/signed/",
+        help_text="Final signed PDF (downloaded from BoldSign or other provider).",
+    )
+    file_source = models.FileField(
+        upload_to="agreements/source/",
+        blank=True,
+        null=True,
+        help_text="(Optional) original doc or unsigned PDF.",
+    )
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(
+        max_length=12,
+        choices=Status.choices,
+        default=Status.SIGNED,
+    )
+    version = models.PositiveIntegerField(default=1)
+    supersedes = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="superseded_by",
+    )
+
+    effective_date = models.DateField(null=True, blank=True)
+    expires_at = models.DateField(null=True, blank=True)
+
+    signed_by_name = models.CharField(max_length=120, blank=True)
+    signed_by_email = models.EmailField(blank=True)
+    signed_at = models.DateTimeField(null=True, blank=True)
+    countersigned_by = models.CharField(max_length=120, blank=True)
+    countersigned_at = models.DateTimeField(null=True, blank=True)
+
+    esign_provider = models.CharField(
+        max_length=60,
+        blank=True,
+        help_text="e.g., 'BoldSign', 'DocuSign', etc.",
+    )
+    esign_envelope_id = models.CharField(
+        max_length=120,
+        blank=True,
+        help_text="Provider-specific ID (e.g., BoldSign document ID).",
+    )
+    esign_view_url = models.URLField(
+        blank=True,
+        help_text="Link to the provider's hosted document/view.",
+    )
+
+    visible_to_client = models.BooleanField(default=True)
+    notes = models.TextField(blank=True)
+
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="agreements_uploaded",
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ("-is_primary", "name")
-        unique_together = (("company", "email"),)
+        ordering = ["-uploaded_at", "-id"]
         indexes = [
-            models.Index(fields=["company", "is_primary"]),
-            models.Index(fields=["company", "email"]),
+            models.Index(fields=["company", "status"]),
+            models.Index(fields=["company", "kind"]),
         ]
 
-    def clean(self):
-        super().clean()
-        if self.is_primary and self.company_id:
-            qs = CompanyContact.objects.filter(company_id=self.company_id, is_primary=True)
-            if self.pk:
-                qs = qs.exclude(pk=self.pk)
-            if qs.exists():
-                raise ValidationError({"is_primary": "This company already has a primary contact."})
-
     def __str__(self):
-        return f"{self.company.name}: {self.name}"
+        base = self.title or f"{self.get_kind_display()} v{self.version}"
+        return f"{self.company.name} · {base}"
+
+    @property
+    def is_active(self):
+        return (
+            self.status in {self.Status.SIGNED}
+            and (not self.expires_at or self.expires_at >= timezone.now().date())
+        )
 
 
 # =======================================================================
-#                          COMPANY LINK
+#                            COMPANY LINK TYPES
 # =======================================================================
-class CompanyLink(models.Model):
-    class Visibility(models.TextChoices):
-        EMPLOYEE = "EMPLOYEE", "Employee only"
-        SHARED   = "SHARED",   "Client & Employee"
 
-    class Section(models.TextChoices):
-        GENERAL    = "GENERAL",    "General"
-        HOSTING    = "HOSTING",    "Hosting / CMS"
-        DOMAINS    = "DOMAINS",    "Domains / DNS"
-        ANALYTICS  = "ANALYTICS",  "Analytics"
-        DESIGN     = "DESIGN",     "Design (Figma, etc.)"
-        REPOSITORY = "REPOSITORY", "Repositories"
-        ENVIRON    = "ENVIRON",    "Environments"
-        DOCS       = "DOCS",       "Docs / Drive"
-        OTHER      = "OTHER",      "Other"
-
-    company     = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="links")
-    label       = models.CharField(max_length=120)
-    url         = models.URLField(blank=True)
-    notes       = models.TextField(blank=True)
-    section     = models.CharField(max_length=20, choices=Section.choices, default=Section.GENERAL, blank=True)
-    tags        = models.CharField(max_length=200, blank=True, help_text="Comma-separated tags (optional)")
-    visibility  = models.CharField(max_length=20, choices=Visibility.choices, default=Visibility.EMPLOYEE)
-    is_active   = models.BooleanField(default=True)
-    sort_order  = models.PositiveIntegerField(default=0)
-
-    key_name    = models.CharField(max_length=120, blank=True, help_text="Name of key/credential (do not store secrets)")
-    key_hint    = models.CharField(max_length=200, blank=True, help_text="Where the key lives (e.g., vault ref)")
-
-    created_by  = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True,
-        on_delete=models.SET_NULL, related_name="company_links_created",
+class CompanyLinkType(models.Model):
+    key = models.SlugField(
+        max_length=50,
+        unique=True,
+        help_text="Internal key (e.g. 'preview', 'social', 'assets_folder').",
     )
-    created_at  = models.DateTimeField(auto_now_add=True)
-    updated_at  = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ("sort_order", "label")
-        unique_together = (("company", "label", "section"),)
-        indexes = [
-            models.Index(fields=["company", "visibility", "is_active", "sort_order"]),
-            models.Index(fields=["company", "section"]),
-        ]
-
-    def __str__(self):
-        return f"{self.company.name}: {self.label}"
-
-
-# =======================================================================
-#                          DNC (Do Not Contact)
-# =======================================================================
-class DncReason(models.Model):
-    code       = models.CharField(max_length=50, unique=True)
-    label      = models.CharField(max_length=120)
+    label = models.CharField(
+        max_length=100,
+        help_text="Human label shown in the UI, e.g. 'Preview Link'.",
+    )
     description = models.TextField(blank=True)
-    is_active  = models.BooleanField(default=True)
-    sort_order = models.PositiveIntegerField(default=0)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    sort_order = models.PositiveIntegerField(
+        default=100,
+        help_text="Lower numbers appear first.",
+    )
+    is_system = models.BooleanField(
+        default=False,
+        help_text="Protect system types from accidental deletion.",
+    )
 
     class Meta:
-        ordering = ("sort_order", "label")
-        indexes = [models.Index(fields=["is_active", "sort_order"])]
+        ordering = ["sort_order", "label"]
 
-    def __str__(self):
-        return f"{self.label} ({self.code})"
+    def __str__(self) -> str:
+        return self.label
 
 
-class DncEntry(models.Model):
-    class Channel(models.TextChoices):
-        EMAIL = "EMAIL", "Email"
-        PHONE = "PHONE", "Phone"
+# =======================================================================
+#                              COMPANY LINKS
+# =======================================================================
 
-    user    = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True,
-        on_delete=models.SET_NULL, related_name="dnc_entries"
+class CompanyLink(models.Model):
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="links",
     )
-    contact = models.ForeignKey(
-        "companyApp.CompanyContact", null=True, blank=True,
-        on_delete=models.SET_NULL, related_name="dnc_entries"
+    link_type = models.ForeignKey(
+        CompanyLinkType,
+        on_delete=models.PROTECT,
+        related_name="links",
     )
 
-    channel = models.CharField(max_length=10, choices=Channel.choices)
-    value_raw = models.CharField(max_length=254, help_text="Original value as entered")
-    value_normalized = models.CharField(max_length=254, editable=False)
-
-    reason = models.ForeignKey(DncReason, null=True, blank=True, on_delete=models.SET_NULL, related_name="entries")
-    notes  = models.TextField(blank=True)
-
-    is_active = models.BooleanField(default=True)
-    source    = models.CharField(max_length=40, blank=True, help_text="e.g., user_request, bounce, manual")
+    title = models.CharField(
+        max_length=255,
+        help_text="Short label, e.g. 'Staging Site' or 'Instagram'.",
+    )
+    url = models.URLField(max_length=500)
 
     created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True,
-        on_delete=models.SET_NULL, related_name="dnc_created"
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="company_links_created",
     )
+
+    notes = models.TextField(blank=True)
+
+    visible_to_client = models.BooleanField(
+        default=True,
+        help_text="If unchecked, only staff sees this link in the portal.",
+    )
+    is_active = models.BooleanField(default=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ("-is_active", "channel", "value_normalized")
-        unique_together = (("channel", "value_normalized", "is_active"),)
+        ordering = ["link_type__sort_order", "title"]
         indexes = [
-            models.Index(fields=["channel", "value_normalized", "is_active"]),
-            models.Index(fields=["user", "is_active"]),
-            models.Index(fields=["contact", "is_active"]),
+            models.Index(fields=["company", "visible_to_client", "is_active"]),
         ]
 
-    # --- normalization helpers ---
-    @staticmethod
-    def _norm_email(v: str) -> str:
-        return (v or "").strip().lower()
+    def __str__(self) -> str:
+        return f"{self.company.name} · {self.title}"
 
-    @staticmethod
-    def _norm_phone(v: str) -> str:
-        return re.sub(r"\D+", "", v or "")
 
-    def clean(self):
-        super().clean()
-        if not self.user_id and not self.contact_id:
-            raise ValidationError("Attach DNC to a User and/or a CompanyContact.")
-        if not self.value_raw:
-            raise ValidationError({"value_raw": "This field is required."})
+# =======================================================================
+#                         PROJECT UPDATES
+# =======================================================================
 
-        if self.channel == self.Channel.EMAIL:
-            self.value_normalized = self._norm_email(self.value_raw)
-        elif self.channel == self.Channel.PHONE:
-            self.value_normalized = self._norm_phone(self.value_raw)
-        else:
-            raise ValidationError({"channel": "Unknown channel."})
+class ProjectUpdate(models.Model):
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="updates",
+    )
+    title = models.CharField(max_length=255)
+    body = models.TextField()
 
-        if not self.value_normalized:
-            raise ValidationError({"value_raw": "Provide a valid value."})
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="project_updates",
+    )
+    visible_to_client = models.BooleanField(default=True)
 
-        if self.is_active:
-            qs = DncEntry.objects.filter(
-                channel=self.channel,
-                value_normalized=self.value_normalized,
-                is_active=True,
-            )
-            if self.pk:
-                qs = qs.exclude(pk=self.pk)
-            if qs.exists():
-                raise ValidationError({"value_raw": "An active DNC already exists for this value."})
+    created_at = models.DateTimeField(auto_now_add=True)
 
-    def save(self, *args, **kwargs):
-        if self.channel == self.Channel.EMAIL:
-            self.value_normalized = self._norm_email(self.value_raw)
-        elif self.channel == self.Channel.PHONE:
-            self.value_normalized = self._norm_phone(self.value_raw)
-        super().save(*args, **kwargs)
+    class Meta:
+        ordering = ["-created_at"]
 
     def __str__(self):
-        target = self.user or self.contact or "value"
-        return f"DNC {self.channel} {self.value_normalized} ({target})"
+        return f"[{self.company.name}] {self.title}"
+
+
+# =======================================================================
+#                         PORTAL INVITES
+# =======================================================================
+
+class PortalInvite(models.Model):
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="invites",
+    )
+    prospect = models.ForeignKey(
+        "prospectApp.Prospect",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="portal_invites",
+        help_text="Original prospect record, if applicable.",
+    )
+
+    email = models.EmailField()
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+
+    created_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="portal_invites_created",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used = models.BooleanField(default=False)
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Invite for {self.email} ({self.company.name})"
+
+    @property
+    def is_valid(self) -> bool:
+        return (not self.used) and timezone.now() < self.expires_at

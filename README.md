@@ -7,14 +7,14 @@ To update your env with the required packages run:
 pip install -r requirements.txt
 
 # Updates:
-## As of 10/1/25:
-- Please run migrations and flush db to allow for new changes.  Proposal changes made. No longer able to currently convert although buttons are there function is broken while updates are made
-Make Migrations
-- python manage.py makemigrations
-- python manage.py migrate
-Flush data in db
-- python manage.py flush --no-input
-SQL folder holds a seed file that has auth group permissions and proposal base data
+## As of 10/29/25:
+On new deployment
+- Check if new migrations are needed
+- Check server .env file (update date should match drive env)
+- If updating env change db server setting to production, Proposal url to live vs local, swap debug to false
+- on settings file update proposal parts section to live vs local
+- On client live deploy (when there) change logout redirect to live vs /
+
 
 # On Mac weasyPrint may cause run issues:
 brew update

@@ -25,6 +25,9 @@ CSRF_TRUSTED_ORIGINS = [
     'https://portal.beedev-services.com',
 ]
 
+
+# ---------- Application definition ------------
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -35,27 +38,21 @@ INSTALLED_APPS = [
     'rest_framework',
     'userApp.apps.UserappConfig',
     'companyApp.apps.CompanyappConfig',
-    'proposalApp.apps.ProposalappConfig',
-    'invoiceApp.apps.InvoiceappConfig',
-    'projectApp.apps.ProjectappConfig',
     'ticketApp.apps.TicketappConfig',
     'prospectApp.apps.ProspectappConfig',
     'announceApp.apps.AnnounceappConfig',
-    'timeApp.apps.TimeappConfig',
+    'onboardingApp.apps.OnboardingappConfig',
     'core.apps.CoreConfig',
-    *(['django_browser_reload'] if env.bool('DEBUG', default=False) else []),
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    "whitenoise.middleware.WhiteNoiseMiddleware",
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    *( ['django_browser_reload.middleware.BrowserReloadMiddleware'] if env.bool('DEBUG', default=False) else [] ),
 ]
 
 ROOT_URLCONF = 'portal.urls'
@@ -80,6 +77,8 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'portal.wsgi.application'
 
+# --------- Database ------------
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
@@ -90,6 +89,8 @@ DATABASES = {
         'PORT': '3306',
     }
 }
+
+# Password validation
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -106,26 +107,11 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
-# -------- Auth: shared login + redirects --------
-AUTH_USER_MODEL = 'userApp.User'
-LOGIN_URL = 'userApp:login'
-LOGIN_REDIRECT_URL = 'userApp:post_login'
-# LOGOUT_REDIRECT_URL = 'https://beedev-services.com/'
-LOGOUT_REDIRECT_URL = '/'
-PROSPECTS_CLIENT_MODEL = "companyApp.Company"
-
-# -------- Proposal Parts --------
-# PROPOSAL_SIGNING_URL_BASE = "https://portal.beedev-services.com/p"
-PROPOSAL_SIGNING_URL_BASE = "http://127.0.0.1:8000/p"
-# PROPOSAL_PUBLIC_BASE_URL = os.environ.get("PROPOSAL_PUBLIC_BASE_URL", "https://portal.beedev-services.com")
-PROPOSAL_PUBLIC_BASE_URL = env("PROPOSAL_PUBLIC_BASE_URL", default="http://127.0.0.1:8000")
-PROPOSAL_ACCOUNT_SIGNUP_URL = os.getenv("PROPOSAL_ACCOUNT_SIGNUP_URL", "/invite/register/")
-
-# Dotted-callables (set now or later)
-PROPOSAL_ACCOUNT_CREATOR = "proposalApp.services.hooks:create_account_for_signed_proposal"
-PROPOSAL_INVOICE_CREATOR = "proposalApp.services.hooks:create_invoice_for_deposit"
-PROPOSAL_MESSENGER       = "proposalApp.services.hooks:send_proposal_email"
+# Internationalization
+LANGUAGE_CODE = 'en-us'
+TIME_ZONE = 'US/Eastern'
+USE_I18N = True
+USE_TZ = True
 
 # -------- Branding for PDFs --------
 BRAND_NAME = "BeeDev Services"
@@ -137,26 +123,12 @@ BRAND_EMAIL = "developers@beedev-services.com"
 BRAND_PHONE = "(845)271-7840"
 BRAND_ADDRESS = "Wappingers Falls, NY 12590"
 
-# Email Settings
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_BACKEND = 'proposalApp.messaging.email_backend.GmailEmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_USE_TLS = True
-EMAIL_PORT = 587
-EMAIL_HOST_USER = env('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
-EMAIL_TIMEOUT = 20
-DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
-
-PROPOSAL_CC = os.getenv("PROPOSAL_CC", "")
-PROPOSAL_BCC = os.getenv("PROPOSAL_BCC", "")
-PROPOSAL_REPLY_TO = os.getenv("PROPOSAL_REPLY_TO", "")
-
-# Internationalization
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'US/Eastern'
-USE_I18N = True
-USE_TZ = True
+# -------- Auth: shared login + redirects --------
+AUTH_USER_MODEL = 'userApp.User'
+LOGIN_URL = 'userApp:login'
+LOGIN_REDIRECT_URL = 'userApp:post_login'
+# LOGOUT_REDIRECT_URL = 'https://beedev-services.com/'
+LOGOUT_REDIRECT_URL = '/'
 
 # -------- Static files: separate source vs. collect dir --------
 STATIC_URL = '/static/'
@@ -172,26 +144,3 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=False)
-
-
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "handlers": {
-        "console": {"class": "logging.StreamHandler"},
-    },
-    "loggers": {
-        # Django 500 errors land here
-        "django.request": {
-            "handlers": ["console"],
-            "level": "ERROR",
-            "propagate": False,
-        },
-        # Template & security errors often show here
-        "django.security": {
-            "handlers": ["console"],
-            "level": "ERROR",
-            "propagate": False,
-        },
-    },
-}
