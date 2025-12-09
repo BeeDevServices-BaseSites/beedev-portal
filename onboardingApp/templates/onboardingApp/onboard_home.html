@@ -19,11 +19,13 @@
       <tr>
         <th>Title</th>
         <th>Company</th>
+        <th>% Complete</th>
       </tr>
       {% for c in client %}
         <tr>
-          <td><a href="#">{{c.title}}</a></td>
+          <td><a href="{% url 'onboarding:list_detail' c.pk %}">{{c.title}}</a></td>
           <td><a href="#">{{c.company}}</a></td>
+          <td>{{c.percent_complete}}%</td>
         </tr>
       {% empty %}
         <tr>
@@ -38,6 +40,7 @@
       <tr>
         <th>Title</th>
         <th>Staff</th>
+        <th>% Complete</th>
       </tr>
       {% for s in staff %}
         <tr>

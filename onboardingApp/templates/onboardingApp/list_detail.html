@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% load page_title user_extras %}
+
+{% block content %}
+    <head>
+    <link rel="stylesheet" href="{% static 'css/onboarding.css'%}?v={% now 'U' %}">
+  </head>
+  <h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
+
+  <div class="mini_menu">
+    <h2><a href="{% url 'userApp:employee_home' %}">Dashboard</a></h2>
+    <h2><a href="{% url 'onboarding:onboard_home' %}">Onboarding Home</a></h2>
+  </div>
+  <div class="mini_menu">
+    <h2>
+        {% if list_obj.kind == "STAFF" %}
+      <a href="#">{{ list_obj.staff_user }} Profile</a>
+    {% else %}
+      <a href="{% url 'prospects:prospect_detail' list_obj.id %}">{{ list_obj.company }} Details</a>
+    {% endif %}
+    </h2>
+  </div>
+  <div class="box">
+    <h2>{{ list_obj.title }}</h2>
+    {% if list_obj.kind == "STAFF" %}
+      <p><strong>Staff:</strong> {{ list_obj.staff_user }}</p>
+    {% else %}
+      <p><strong>Company:</strong> {{ list_obj.company }}</p>
+    {% endif %}
+    {% if list_obj.notes %}
+      <p>{{ list_obj.notes|linebreaksbr }}</p>
+    {% endif %}
+  </div>
+  <div class="progress">
+    <h2>Progress:</h2>
+    <p>
+      {{list_obj.completed_items}} of {{list_obj.total_items}}
+      ({{list_obj.percent_complete}}%)
+    </p>
+
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+
+    <table class="table checklist-table">
+      <thead>
+        <tr>
+          <th>Done</th>
+          <th>Task</th>
+          <th>Resource</th>
+          <th>Completed</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+          <tr class="{% if item.is_completed %}completed{% endif %}">
+            <td>
+              {% if can_edit %}
+                <input
+                  type="checkbox"
+                  name="item-{{ item.pk }}"
+                  {% if item.is_completed %}checked{% endif %}
+                >
+              {% else %}
+                <input
+                  type="checkbox"
+                  disabled
+                  {% if item.is_completed %}checked{% endif %}
+                >
+              {% endif %}
+            </td>
+            <td>
+              <strong>{{ item.title }}</strong><br>
+              {% if item.description %}
+                <span class="muted">{{ item.description|linebreaksbr }}</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if item.resource_url %}
+                <a href="{{ item.resource_url }}" target="_blank" rel="noopener">
+                  Open link
+                </a>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td>
+              {% if item.is_completed %}
+                {{ item.completed_at|date:"Y-m-d H:i" }}<br>
+                <span class="muted">by {{ item.completed_by }}</span>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if can_edit %}
+      <button type="submit" class="btn">Save Checklist</button>
+    {% endif %}
+  </form>
+{% endblock %}

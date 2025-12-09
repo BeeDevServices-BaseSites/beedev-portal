@@ -164,6 +164,34 @@ class OnboardingList(TimeStamped):
                 )
             )
         OnboardingListItem.objects.bulk_create(items)
+    
+    @property
+    def total_items(self) -> int:
+        return self.items.count()
+
+    @property
+    def completed_items(self) -> int:
+        return self.items.filter(is_completed=True).count()
+
+    @property
+    def percent_complete(self) -> int:
+        total = self.total_items
+        if not total:
+            return 0
+        return round(self.completed_items * 100 / total)
+    
+    def refresh_completion_status(self, save=True):
+        total = self.items.count()
+        done = self.items.filter(is_completed=True).count()
+
+        if total > 0 and done == total and self.completed_at is None:
+            self.completed_at = timezone.now()
+            if save:
+                self.save(update_fields=["completed_at", "updated_at"])
+        elif done < total and self.completed_at is not None:
+            self.completed_at = None
+            if save:
+                self.save(update_fields=["completed_at", "updated_at"])
 
 
 # =======================================================================
@@ -218,3 +246,5 @@ class OnboardingListItem(TimeStamped):
         if user:
             self.completed_by = user
         self.save(update_fields=["is_completed", "completed_at", "completed_by", "updated_at"])
+
+        self.onboarding_list.refresh_completion_status(save=True)
