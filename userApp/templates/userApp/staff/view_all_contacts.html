@@ -43,7 +43,7 @@
             </tr>
             {% for w in won %}
                 <tr>
-                    <td><a href="{% url 'prospects:view_one_prospect' w.pk %}">{{w.full_name}}</a></td>
+                    <td><a href="{% url 'company_staff:company_detail' w.pk %}">{{w.full_name}}</a></td>
                     <td>{{w.company_name}}</td>
                     <td>{{w.status}}</td>
                     <td></td>
@@ -65,7 +65,7 @@
             </tr>
             {% for c in contacts %}
                 <tr>
-                    <td><a href="{% url 'userApp:client_profile_staff' c.pk %}">{{c.username}}</a></td>
+                    <td><a href="#">{{c.username}}</a></td>
                     <td>{{c.first_name}} {{c.last_name}}</td>
                     <td>{{c.email}}</td>
                 </tr>
@@ -86,7 +86,7 @@
             </tr>
             {% for l in lost %}
                 <tr>
-                    <td><a href="{% url 'prospects:view_one_prospect' l.pk %}">{{l.full_name}}</a></td>
+                    <td><a href="#">{{l.full_name}}</a></td>
                     <td>{{l.company_name}}</td>
                     <td>{{l.status}}</td>
                 </tr>

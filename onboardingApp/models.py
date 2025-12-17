@@ -1,6 +1,7 @@
 # onboardingApp/models.py
 
 from django.db import models, transaction
+from django.core.exceptions import ValidationError
 from django.conf import settings
 from django.utils import timezone
 
@@ -51,6 +52,7 @@ class OnboardingTaskTemplate(TimeStamped):
         default=True,
         help_text="Inactive templates won't be added to new onboarding lists.",
     )
+    requires_resource = models.BooleanField(default=False)
 
     class Meta:
         ordering = ("audience", "default_order", "title")
@@ -161,6 +163,8 @@ class OnboardingList(TimeStamped):
                     title=tmpl.title,
                     description=tmpl.description,
                     sort_order=tmpl.default_order,
+                    requires_resource=tmpl.requires_resource,
+                    resource_added=False,
                 )
             )
         OnboardingListItem.objects.bulk_create(items)
@@ -228,10 +232,8 @@ class OnboardingListItem(TimeStamped):
         related_name="onboarding_items_completed",
     )
 
-    resource_url = models.URLField(
-        blank=True,
-        help_text="Optional link relevant to this task (contract, preview site, folder, etc.).",
-    )
+    requires_resource = models.BooleanField(default=False)
+    resource_added = models.BooleanField(default=False)
     notes = models.TextField(blank=True)
 
     class Meta:
@@ -241,6 +243,8 @@ class OnboardingListItem(TimeStamped):
         return f"{self.onboarding_list} · {self.title}"
 
     def mark_complete(self, user=None):
+        if self.requires_resource and not self.resource_added:
+            raise ValidationError("Resource must be added before completing this item.")
         self.is_completed = True
         self.completed_at = timezone.now()
         if user:

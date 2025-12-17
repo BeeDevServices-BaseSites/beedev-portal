@@ -8,7 +8,7 @@
 </head>
 <h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
 <div class="mini_menu">
-    <h2><a href="{% url 'userApp:employee_home' %}">Dashboard</a></h2>
+    <h2><a href="{% url 'userApp:staff_home' %}">Dashboard</a></h2>
 </div>
 <div class="detail">
     <h3>Prospects</h3>
@@ -41,7 +41,7 @@
         </tr>
         {% for c in companies %}
             <tr>
-                <td><a href="#">{{ c.name }}</a></td>
+                <td><a href="{% url 'company_staff:company_detail' c.pk %}">{{ c.name }}</a></td>
                 <td>{{c.status}}</td>
                 <td>{{c.pipeline_status}}</td>
             </tr>

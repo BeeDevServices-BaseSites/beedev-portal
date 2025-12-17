@@ -32,3 +32,17 @@ def company_home(request):
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title
     return render(request, "company_staff/company_home.html", ctx)
+
+@login_required
+def view_company_detail(request, pk: int):
+    user = request.user
+    if not _allowed_staff(request.user):
+        raise PermissionDenied("Not Allowed")
+    
+    company = get_object_or_404(Company, pk=pk)
+
+    title = f"{company.name} - Details"
+    ctx = {"user_obj": user, "read_only": True, "company": company}
+    ctx.update(base_ctx(request, title=title))
+    ctx["page_heading"] = title
+    return render(request, "company_staff/view_company_detail.html", ctx)

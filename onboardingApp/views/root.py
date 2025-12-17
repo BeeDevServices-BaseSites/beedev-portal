@@ -2,7 +2,7 @@
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db import transaction
 
@@ -123,21 +123,43 @@ def onboarding_list_detail(request, pk: int):
         if not can_edit:
             raise PermissionDenied("You are not allowed to update this checklist.")
 
-        posted_ids = set()
+        posted_done_ids = set()
+        posted_resource_ids = set()
+
         for key in request.POST.keys():
             if key.startswith("item-"):
                 try:
-                    item_id = int(key.split("-", 1)[1])
-                    posted_ids.add(item_id)
+                    posted_done_ids.add(int(key.split("-", 1)[1]))
                 except ValueError:
-                    continue
+                    pass
+            if key.startswith("resource-"):
+                try:
+                    posted_resource_ids.add(int(key.split("-", 1)[1]))
+                except ValueError:
+                    pass
+        
+        blocked_titles = []
 
         for item in items:
-            should_be_completed = item.pk in posted_ids
+            wants_done = item.pk in posted_done_ids
 
-            if should_be_completed and not item.is_completed:
-                item.mark_complete(user=user)
-            elif not should_be_completed and item.is_completed:
+            if item.requires_resource:
+                resource_checked = item.pk in posted_resource_ids
+                if item.resource_added != resource_checked:
+                    item.resource_added = resource_checked
+                    item.save(update_fields=["resource_added", "updated_at"])
+
+            if wants_done and item.requires_resource and not item.resource_added:
+                blocked_titles.append(item.title)
+                wants_done = False
+            
+            if wants_done and not item.is_completed:
+                try:
+                    item.mark_complete(user=user)
+                except ValidationError:
+                    blocked_titles.append(item.title)
+            
+            elif not wants_done and item.is_completed:
                 item.is_completed = False
                 item.completed_at = None
                 item.completed_by = None
@@ -149,8 +171,18 @@ def onboarding_list_detail(request, pk: int):
                         "updated_at",
                     ]
                 )
+        
+        if blocked_titles:
+            messages.error(
+                request,
+                "Some tasks require a resource to be added before they can be completed: "
+                + ", ".join(f'"{t}"' for t in blocked_titles)
+            )
+        else:
+            messages.success(request, "Onboarding checklist updated.")
 
-        messages.success(request, "Onboarding checklist updated.")
+        lst.refresh_completion_status(save=True)
+
         return redirect("onboarding:list_detail", pk=lst.pk)
 
     # GET: render page

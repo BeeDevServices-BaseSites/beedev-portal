@@ -30,10 +30,6 @@ def is_plain_staff(u):
 # ============================ Inlines ============================
 
 class OnboardingListItemInline(admin.TabularInline):
-    """
-    Inline for items inside a single onboarding list.
-    You can tweak which fields are editable vs read-only.
-    """
     model = OnboardingListItem
     extra = 0
     autocomplete_fields = ("completed_by",)
@@ -41,7 +37,8 @@ class OnboardingListItemInline(admin.TabularInline):
         "title",
         "is_completed",
         "completed_by",
-        "resource_url",
+        "requires_resource",
+        "resource_added",
         "sort_order",
         "notes",
         "created_at",
@@ -68,6 +65,7 @@ class OnboardingTaskTemplateAdmin(admin.ModelAdmin):
         "title",
         "audience",
         "default_order",
+        "requires_resource",
         "is_active",
         "updated_at",
     )
@@ -81,6 +79,7 @@ class OnboardingTaskTemplateAdmin(admin.ModelAdmin):
         "title",
         "description",
         "default_order",
+        "requires_resource",
         "is_active",
         "created_at",
         "updated_at",
@@ -190,6 +189,8 @@ class OnboardingListItemAdmin(admin.ModelAdmin):
     list_display = (
         "title",
         "onboarding_list",
+        "requires_resource",
+        "resource_added",
         "is_completed",
         "completed_at",
         "completed_by",
@@ -215,7 +216,8 @@ class OnboardingListItemAdmin(admin.ModelAdmin):
         "is_completed",
         "completed_at",
         "completed_by",
-        "resource_url",
+        "requires_resource",
+        "resource_added",
         "notes",
         "created_at",
         "updated_at",

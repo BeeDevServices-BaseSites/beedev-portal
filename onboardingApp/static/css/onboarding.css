@@ -54,7 +54,6 @@ body main .mini_menu a:hover {
   text-decoration: underline;
 }
 body main table {
-  width: 50%;
   margin: 1em;
 }
 body main table tr th {

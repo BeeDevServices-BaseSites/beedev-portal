@@ -139,8 +139,8 @@ class Prospect(TimeStamped):
                 "primary_contact_email": contact_email,
                 "phone": self.phone or "",
                 "website": self.website_url or "",
-                "status": Company.Status.PROSPECT,
-                "pipeline_status": Company.PipelineStatus.HOLDING,
+                "status": Company.Status.CONVERTED_PROSPECT,
+                "pipeline_status": Company.PipelineStatus.NEW,
                 "work_status": Company.WorkStatus.NONE,
                 "consultation_sheet_url": self.sheet_url or "",
                 "created_by": actor,
@@ -150,12 +150,12 @@ class Prospect(TimeStamped):
         if not created:
             fields_to_update = []
 
-            if not company.contact_name and contact_name:
-                company.contact_name = contact_name
+            if not company.primary_contact_name and contact_name:
+                company.primary_contact_name = contact_name
                 fields_to_update.append("contact_name")
 
-            if not company.contact_email and contact_email:
-                company.contact_email = contact_email
+            if not company.primary_contact_email and contact_email:
+                company.primary_contact_email = contact_email
                 fields_to_update.append("contact_email")
 
             if not company.phone and self.phone:
