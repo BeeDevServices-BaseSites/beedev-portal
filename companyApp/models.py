@@ -4,12 +4,15 @@ import uuid
 import datetime
 
 from django.db import models
+from django.db.models import Q
 from django.conf import settings
 from django.core.validators import FileExtensionValidator
 from django.core.exceptions import ValidationError
 from django.templatetags.static import static
 from django.utils.text import slugify
 from django.utils import timezone
+
+from . import uploads
 
 User = settings.AUTH_USER_MODEL
 
@@ -73,6 +76,15 @@ class Company(models.Model):
         RECURRING_INVOICE_SENT = "RECURRING_INVOICE_SENT", "Recurring Invoice Sent"
         RECURRING_INVOICE_PAID = "RECURRING_INVOICE_PAID", "Recurring Invoice Paid"
         ON_HOLD = "ON_HOLD", "On Hold"
+    
+    class ProjectPhase(models.TextChoices):
+        NONE = "NONE", "Not Started"
+        DISCOVERY = "DISCOVERY", "Discovery"
+        DESIGN = "DESIGN", "Design"
+        DEVELOPMENT = "DEVELOPMENT", "Development"
+        TESTING = "TESTING", "Testing / QA"
+        LAUNCH = "LAUNCH", "Launch"
+        MAINTENANCE = "MAINTENANCE", "Maintenance"
 
     name = models.CharField(max_length=200, unique=True)
     slug = models.SlugField(max_length=220, unique=True, blank=True)
@@ -131,6 +143,12 @@ class Company(models.Model):
         default=WorkStatus.NONE,
         help_text="Micro status for current work state (e.g., design started, deposit invoice sent).",
     )
+    project_phase = models.CharField(
+        max_length=20,
+        choices=ProjectPhase.choices,
+        default=ProjectPhase.NONE,
+    )
+    project_phase_updated_at = models.DateTimeField(null=True, blank=True)
 
     prospect = models.OneToOneField(
         "prospectApp.Prospect",
@@ -159,9 +177,18 @@ class Company(models.Model):
             models.Index(fields=["status"]),
             models.Index(fields=["pipeline_status"]),
             models.Index(fields=["work_status"]),
+            models.Index(fields=["project_phase"]),
         ]
 
     def save(self, *args, **kwargs):
+        if self.pk:
+            old = Company.objects.filter(pk=self.pk).values("project_phase").first()
+            if old and old["project_phase"] != self.project_phase:
+                self.project_phase_updated_at = timezone.now()
+        else:
+            if self.project_phase and self.project_phase != Company.ProjectPhase.NONE:
+                self.project_phase_updated_at = timezone.now()
+
         if not self.slug:
             base = slugify(self.name) or "company"
             slug = base
@@ -170,6 +197,7 @@ class Company(models.Model):
                 slug = f"{base}-{i}"
                 i += 1
             self.slug = slug
+
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -241,42 +269,147 @@ class CompanyMember(models.Model):
 
 
 # =======================================================================
-#                         PROPOSAL & ROADMAP
+#                         PROPOSAL & ROADMAP & INVOICE
 # =======================================================================
 
 class ProposalDocument(models.Model):
-    company = models.OneToOneField(
-        Company,
+    company = models.ForeignKey(
+        "companyApp.Company",
         on_delete=models.CASCADE,
-        related_name="proposal_document",
+        related_name="proposals",
     )
-    file = models.FileField(upload_to="proposals/")
-    uploaded_at = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self):
-        return f"Proposal for {self.company.name}"
+    title = models.CharField(max_length=255, blank=True)
+    version = models.PositiveIntegerField(default=1)
+    is_active = models.BooleanField(default=True)
 
+    file = models.FileField(upload_to=uploads.proposals_upload_to, blank=True, null=True)
+    external_url = models.URLField(blank=True)
 
-class Roadmap(models.Model):
-    company = models.OneToOneField(
-        Company,
-        on_delete=models.CASCADE,
-        related_name="roadmap",
-    )
-    file = models.FileField(
-        upload_to="roadmaps/",
-        blank=True,
+    visible_to_client = models.BooleanField(default=True)
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
         null=True,
-        help_text="Optional roadmap PDF or document.",
-    )
-    notes = models.TextField(
         blank=True,
-        help_text="Optional text roadmap / milestones.",
+        related_name="proposals_created",
     )
+
+    created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        ordering = ["-is_active", "-version", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company"],
+                condition=Q(is_active=True),
+                name="one_active_proposal_per_company",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "is_active"]),
+            models.Index(fields=["company", "visible_to_client"]),
+        ]
+
     def __str__(self):
-        return f"Roadmap for {self.company.name}"
+        label = self.title or f"Proposal v{self.version}"
+        return f"{self.company} · {label}"
+
+    def clean(self):
+        if not self.file and not self.external_url:
+            raise ValidationError("Provide a proposal file or an external URL.")
+
+class RoadMap(models.Model):
+    company = models.ForeignKey(
+        "companyApp.Company",
+        on_delete=models.CASCADE,
+        related_name="roadmaps",
+    )
+
+    title = models.CharField(max_length=255, blank=True)
+    version = models.PositiveIntegerField(default=1)
+    is_active = models.BooleanField(default=True)
+
+    file = models.FileField(upload_to=uploads.roadmaps_upload_to, blank=True, null=True)
+    external_url = models.URLField(blank=True)
+
+    visible_to_client = models.BooleanField(default=True)
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="roadmaps_created",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-is_active", "-version", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company"],
+                condition=Q(is_active=True),
+                name="one_active_roadmap_per_company",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["company", "is_active"]),
+            models.Index(fields=["company", "visible_to_client"]),
+        ]
+
+    def __str__(self):
+        label = self.title or f"Roadmap v{self.version}"
+        return f"{self.company} · {label}"
+
+    def clean(self):
+        if not self.file and not self.external_url:
+            raise ValidationError("Provide a roadmap file or an external URL.")
+
+class Invoice(models.Model):
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="invoices",
+    )
+
+    invoice_number = models.CharField(max_length=50, blank=True)
+    title = models.CharField(max_length=255, blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    file = models.FileField(upload_to=uploads.invoices_upload_to, blank=True, null=True)
+
+    external_url = models.URLField(blank=True)
+
+    visible_to_client = models.BooleanField(default=True)
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="invoices_created",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-paid_at", "-created_at"]
+        indexes = [
+            models.Index(fields=["company", "visible_to_client"]),
+            models.Index(fields=["company", "paid_at"]),
+        ]
+
+    def clean(self):
+        if not self.file and not self.external_url:
+            raise ValidationError("Provide an invoice file or an external URL.")
 
 
 # =======================================================================
@@ -285,7 +418,7 @@ class Roadmap(models.Model):
 
 class Agreement(models.Model):
     class Kind(models.TextChoices):
-        MSA = "CSA", "Client Services Agreement"
+        CSA = "CSA", "Client Services Agreement"
         SOW = "SOW", "Statement of Work"
         NDA = "NDA", "Non-Disclosure Agreement"
         OTHER = "OTHER", "Other"
@@ -314,11 +447,11 @@ class Agreement(models.Model):
     )
 
     file_signed = models.FileField(
-        upload_to="agreements/signed/",
+        upload_to=uploads.agreements_signed_upload_to,
         help_text="Final signed PDF (downloaded from BoldSign or other provider).",
     )
     file_source = models.FileField(
-        upload_to="agreements/source/",
+        upload_to=uploads.agreements_source_upload_to,
         blank=True,
         null=True,
         help_text="(Optional) original doc or unsigned PDF.",
@@ -480,7 +613,7 @@ class CompanyLink(models.Model):
 #                         PROJECT UPDATES
 # =======================================================================
 
-class ProjectUpdate(models.Model):
+class CompanyUpdateLog(models.Model):
     company = models.ForeignKey(
         Company,
         on_delete=models.CASCADE,
@@ -498,10 +631,13 @@ class ProjectUpdate(models.Model):
     )
     visible_to_client = models.BooleanField(default=True)
 
+    pinned = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering = ["-pinned", "-created_at"]
 
     def __str__(self):
         return f"[{self.company.name}] {self.title}"

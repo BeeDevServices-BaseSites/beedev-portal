@@ -12,9 +12,10 @@ from .models import (
     Company,
     CompanyMember,
     ProposalDocument,
-    Roadmap,
+    RoadMap,
+    Invoice,
     Agreement,
-    ProjectUpdate,
+    CompanyUpdateLog,
     PortalInvite,
 )
 
@@ -58,30 +59,66 @@ class CompanyMemberInline(admin.TabularInline):
     def has_delete_permission(self, request, obj=None):
         return is_owner(request.user)
 
-
-class ProposalDocumentInline(admin.StackedInline):
+class ProposalDocumentInline(admin.TabularInline):
     model = ProposalDocument
     extra = 0
-    max_num = 1
-    can_delete = True
-    fields = ("file", "uploaded_at")
-    readonly_fields = ("uploaded_at",)
+    fields = (
+        "title",
+        "version",
+        "is_active",
+        "visible_to_client",
+        "file",
+        "external_url",
+        "created_by",
+        "created_at",
+        "updated_at",
+    )
+    readonly_fields = ("created_at", "updated_at")
+    autocomplete_fields = ("created_by",)
 
     def has_change_permission(self, request, obj=None):
         return is_owner(request.user) or is_staff_role(request.user)
 
-
-class RoadmapInline(admin.StackedInline):
-    model = Roadmap
+class RoadMapInline(admin.TabularInline):
+    model = RoadMap
     extra = 0
-    max_num = 1
-    can_delete = True
-    fields = ("file", "notes", "updated_at")
-    readonly_fields = ("updated_at",)
+    fields = (
+        "title",
+        "version",
+        "is_active",
+        "visible_to_client",
+        "file",
+        "external_url",
+        "created_by",
+        "created_at",
+        "updated_at",
+    )
+    readonly_fields = ("created_at", "updated_at")
+    autocomplete_fields = ("created_by",)
 
     def has_change_permission(self, request, obj=None):
         return is_owner(request.user) or is_staff_role(request.user)
 
+class InvoiceInline(admin.TabularInline):
+    model = Invoice
+    extra = 0
+    fields = (
+        "invoice_number",
+        "title",
+        "amount",
+        "paid_at",
+        "visible_to_client",
+        "file",
+        "external_url",
+        "created_by",
+        "created_at",
+        "updated_at",
+    )
+    readonly_fields = ("created_at", "updated_at")
+    autocomplete_fields = ("created_by",)
+
+    def has_change_permission(self, request, obj=None):
+        return is_owner(request.user) or is_staff_role(request.user)
 
 class AgreementInline(admin.TabularInline):
     model = Agreement
@@ -90,29 +127,48 @@ class AgreementInline(admin.TabularInline):
         "kind",
         "title",
         "status",
+        "version",
         "file_signed",
+        "file_source",
         "effective_date",
         "expires_at",
         "visible_to_client",
+        "uploaded_by",
         "uploaded_at",
     )
     readonly_fields = ("uploaded_at",)
+    autocomplete_fields = ("uploaded_by",)
 
     def has_change_permission(self, request, obj=None):
         return is_owner(request.user) or is_staff_role(request.user)
 
+class CompanyUpdateLogInline(admin.TabularInline):
+    model = CompanyUpdateLog
+    extra = 0
+    fields = (
+        "pinned",
+        "title",
+        "visible_to_client",
+        "created_by",
+        "created_at",
+        "updated_at",
+    )
+    readonly_fields = ("created_at", "updated_at")
+    autocomplete_fields = ("created_by",)
+
+    def has_change_permission(self, request, obj=None):
+        return is_owner(request.user) or is_staff_role(request.user)
 
 class PortalInviteInline(admin.TabularInline):
     model = PortalInvite
     extra = 0
     fields = (
         "email",
-        "token",
         "created_at",
         "expires_at",
         "used",
     )
-    readonly_fields = ("token", "created_at", "expires_at", "used")
+    readonly_fields = ("created_at", "expires_at", "used")
 
     def has_add_permission(self, request, obj=None):
         return False
@@ -210,8 +266,10 @@ class CompanyAdmin(admin.ModelAdmin):
     inlines = [
         CompanyMemberInline,
         ProposalDocumentInline,
-        RoadmapInline,
+        RoadMapInline,
         AgreementInline,
+        InvoiceInline,
+        CompanyUpdateLogInline,
         PortalInviteInline,
     ]
     readonly_fields = ("logo_preview", "created_at", "updated_at")
@@ -298,6 +356,19 @@ class CompanyAdmin(admin.ModelAdmin):
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
 
+    def save_formset(self, request, form, formset, change):
+        instances = formset.save(commit=False)
+
+        for obj in instances:
+            if hasattr(obj, "created_by") and not obj.created_by:
+                obj.created_by = request.user
+            obj.save()
+
+        for obj in formset.deleted_objects:
+            obj.delete()
+
+        formset.save_m2m()
+
 
 # -------- Other model admins (lightweight) --------
 
@@ -321,17 +392,15 @@ class AgreementAdmin(admin.ModelAdmin):
     def has_module_permission(self, request):
         return request.user.is_staff and (is_owner(request.user) or is_staff_role(request.user))
 
-
-@admin.register(ProjectUpdate)
-class ProjectUpdateAdmin(admin.ModelAdmin):
-    list_display = ("company", "title", "visible_to_client", "created_at")
-    list_filter = ("visible_to_client",)
+@admin.register(CompanyUpdateLog)
+class CompanyUpdateLogAdmin(admin.ModelAdmin):
+    list_display = ("company", "pinned", "title", "visible_to_client", "created_at")
+    list_filter = ("visible_to_client", "pinned")
     search_fields = ("company__name", "title", "body")
     autocomplete_fields = ("company", "created_by")
 
     def has_module_permission(self, request):
         return request.user.is_staff and (is_owner(request.user) or is_staff_role(request.user))
-
 
 @admin.register(PortalInvite)
 class PortalInviteAdmin(admin.ModelAdmin):
@@ -354,22 +423,35 @@ class PortalInviteAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return is_owner(request.user)
 
-
 @admin.register(ProposalDocument)
 class ProposalDocumentAdmin(admin.ModelAdmin):
-    list_display = ("company", "file", "uploaded_at")
-    autocomplete_fields = ("company",)
-    readonly_fields = ("uploaded_at",)
+    list_display = ("company", "title", "version", "is_active", "visible_to_client", "created_at")
+    list_filter = ("is_active", "visible_to_client")
+    search_fields = ("company__name", "title")
+    autocomplete_fields = ("company", "created_by")
+    readonly_fields = ("created_at", "updated_at")
 
     def has_module_permission(self, request):
         return request.user.is_staff and (is_owner(request.user) or is_staff_role(request.user))
 
+@admin.register(RoadMap)
+class RoadMapAdmin(admin.ModelAdmin):
+    list_display = ("company", "title", "version", "is_active", "visible_to_client", "created_at")
+    list_filter = ("is_active", "visible_to_client")
+    search_fields = ("company__name", "title")
+    autocomplete_fields = ("company", "created_by")
+    readonly_fields = ("created_at", "updated_at")
 
-@admin.register(Roadmap)
-class RoadmapAdmin(admin.ModelAdmin):
-    list_display = ("company", "file", "updated_at")
-    autocomplete_fields = ("company",)
-    readonly_fields = ("updated_at",)
+    def has_module_permission(self, request):
+        return request.user.is_staff and (is_owner(request.user) or is_staff_role(request.user))
+
+@admin.register(Invoice)
+class InvoiceAdmin(admin.ModelAdmin):
+    list_display = ("company", "invoice_number", "title", "amount", "paid_at", "visible_to_client", "created_at")
+    list_filter = ("visible_to_client",)
+    search_fields = ("company__name", "invoice_number", "title")
+    autocomplete_fields = ("company", "created_by")
+    readonly_fields = ("created_at", "updated_at")
 
     def has_module_permission(self, request):
         return request.user.is_staff and (is_owner(request.user) or is_staff_role(request.user))

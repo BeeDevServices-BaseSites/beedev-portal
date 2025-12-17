@@ -10,10 +10,20 @@
 
     <div class="dash">
         <div class="metrics">
+            <h2>Company Metrics</h2>
             <h3>Active Companies:  {{dash.metrics.total_companies}}</h3>
             <h3>Active Prospects:  {{dash.metrics.total_prospects}}</h3>
             <h3>Open Tickets:  {{dash.metrics.open_tickets}}</h3>
-            <h3>My Open Tickets:  {{dash.metrics.my_open_tickets}}</h3>
+            <h3>Client Onboarding Lists: {{ dash.metrics.client_onboarding_lists }}</h3>
+            {% if dash.metrics.client_onboarding_lists %}
+                <h3>Client Onboarding Complete: {{ dash.metrics.client_onboarding_percent }}%</h3>
+            {% else %}
+                <h3>Client Onboarding Complete: —</h3>
+            {% endif %}
+        </div>
+        <div class="metrics">
+            <h2>My Metrics:</h2>
+            <h3>My Open Tickets:  {{dash.my_metrics.my_open_tickets}}</h3>
         </div>
     </div>
     

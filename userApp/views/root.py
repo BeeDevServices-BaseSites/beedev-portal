@@ -55,13 +55,28 @@ def staff_home(request):
         return redirect("userApp:client_home")
     
     today = timezone.now()
+
+    # Company-wide metrics
+    client_onboarding_qs = OnboardingList.objects.filter(kind=OnboardingList.Kind.CLIENT, is_archived=False)
+
+    client_items_total = OnboardingListItem.objects.filter(onboarding_list__in=client_onboarding_qs).count()
+
+    client_items_done = OnboardingListItem.objects.filter(onboarding_list__in=client_onboarding_qs, is_completed=True).count()
+
     total_companies = Company.objects.filter(status__in=[Company.Status.PROSPECT, Company.Status.ACTIVE]).count()
 
     total_prospects = Prospect.objects.exclude(status=Prospect.Status.CLOSED_LOST).count()
 
     open_tickets = Ticket.objects.filter(status__in=[Ticket.Status.NEW, Ticket.Status.OPEN, Ticket.Status.INPROGRESS, Ticket.Status.PENDING]).count()
 
+    client_onboarding_lists = client_onboarding_qs.count()
+
+    client_onboarding_percent = (round((client_items_done * 100) / client_items_total)if client_items_total else 0)
+
+    # User-specific metrics
     my_open_tickets = Ticket.objects.filter(assigned_to=user, status__in=[Ticket.Status.NEW, Ticket.Status.OPEN, Ticket.Status.INPROGRESS, Ticket.Status.PENDING,],).count()
+
+    # Dashboard lists/widgets
 
     prospects_needing_followup = (Prospect.objects.filter(Q(next_follow_up_at__lte=today) | Q(next_follow_up_at__isnull=True),).exclude(status__in=[Prospect.Status.WON, Prospect.Status.CLOSED_LOST]).order_by("next_follow_up_at", "full_name", "company_name")[:10])
 
@@ -74,6 +89,10 @@ def staff_home(request):
             "total_companies": total_companies,
             "total_prospects": total_prospects,
             "open_tickets": open_tickets,
+            "client_onboarding_lists": client_onboarding_lists,
+            "client_onboarding_percent": client_onboarding_percent,
+        },
+        "my_metrics": {
             "my_open_tickets": my_open_tickets,
         },
         "prospects_needing_followup": prospects_needing_followup,
