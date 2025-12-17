@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% load page_title user_extras %}
+
+{% block content %}
+  <head>
+    <link rel="stylesheet" href="{% static 'css/company.css'%}?v={% now 'U' %}">
+  </head>
+  <h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
+
+  <div class="mini_menu">
+    <h2><a href="{% url 'userApp:staff_home' %}">Dashboard</a></h2>
+    <h2><a href="{% url 'company_staff:company_home' %}">Company Home</a></h2>
+    <h2><a href="{% url 'company_staff:company_detail' company.pk %}">Back to {{ company.name }}</a></h2>
+  </div>
+  <div class="info">
+    <h3>Progress Update</h3>
+    <p class="muted">
+      This page updates client-facing progress: project phase + progress notes.
+    </p>
+
+    <form method="post">
+      {% csrf_token %}
+
+      {# -------- Phase form errors -------- #}
+      {% if phase_form.non_field_errors %}
+        <div class="error">{{ phase_form.non_field_errors }}</div>
+      {% endif %}
+
+      <h4>Project Phase</h4>
+      <table class="entry">
+        {% for field in phase_form %}
+          <tr>
+            <th>{{ field.label }}</th>
+            <td>
+              {{ field }}
+              {% if field.help_text %}<div class="muted">{{ field.help_text }}</div>{% endif %}
+              {% if field.errors %}<div class="error">{{ field.errors }}</div>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+
+      <h4>Add a Progress Note</h4>
+
+      {# -------- Update form errors -------- #}
+      {% if update_form.non_field_errors %}
+        <div class="error">{{ update_form.non_field_errors }}</div>
+      {% endif %}
+
+      <table class="entry">
+        {% for field in update_form %}
+          <tr>
+            <th>{{ field.label }}</th>
+            <td>
+              {{ field }}
+              {% if field.help_text %}<div class="muted">{{ field.help_text }}</div>{% endif %}
+              {% if field.errors %}<div class="error">{{ field.errors }}</div>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+
+      <div class="mini_menu">
+        <button type="submit" class="btn">Save Progress</button>
+        <a class="btn" href="{% url 'company_staff:company_detail' company.pk %}">Cancel</a>
+      </div>
+
+      <div class="box">
+        <h4>What pinned means</h4>
+        <p class="muted">
+          Pinned updates stay at the top of the client progress log until you unpin them.
+        </p>
+      </div>
+    </form>
+  </div>
+
+  <div class="info">
+    <h3>Client-visible Progress Log</h3>
+
+    {% if updates %}
+      {% for u in updates %}
+        <div class="box {% if u.pinned %}pinned{% endif %}">
+          <h4>{{ u.title }}</h4>
+          <p class="muted">
+            {{ u.created_at|date:"Y-m-d H:i" }}
+            {% if u.created_by %} • by {{ u.created_by|user_name }}{% endif %}
+            {% if u.pinned %} • pinned{% endif %}
+          </p>
+          <p>{{ u.body|linebreaksbr }}</p>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="muted">— No client-visible updates yet.</p>
+    {% endif %}
+  </div>
+
+
+{% endblock content %}

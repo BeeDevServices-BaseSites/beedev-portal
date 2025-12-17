@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% load page_title user_extras %}
+
+{% block content %}
+  <head>
+    <link rel="stylesheet" href="{% static 'css/company.css'%}?v={% now 'U' %}">
+  </head>
+  <h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
+
+  <div class="mini_menu">
+    <h2><a href="{% url 'userApp:staff_home' %}">Dashboard</a></h2>
+    <h2><a href="{% url 'company_staff:company_home' %}">Company Home</a></h2>
+    <h2><a href="{% url 'company_staff:company_detail' company.pk %}">Back to {{ company.name }}</a></h2>
+  </div>
+  <div class="info">
+    <h3>Update Status</h3>
+
+    <form method="post">
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+        <div class="error">
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+
+      <table class="entry">
+        {% for field in form %}
+          <tr>
+            <th>{{ field.label }}</th>
+            <td>
+              {{ field }}
+              {% if field.errors %}
+                <div class="error">{{ field.errors }}</div>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+
+      <div class="mini_menu">
+        <button type="submit" class="btn">Save Status</button>
+        <a class="btn" href="{% url 'company_staff:company_detail' company.pk %}">Cancel</a>
+      </div>
+    </form>
+
+    <div class="box">
+  <h4>Status Guide</h4>
+  <ul class="muted">
+    <li><strong>Status</strong>: Business relationship (Prospect, Client, Lost)</li>
+    <li><strong>Pipeline Status</strong>: High-level delivery stage (Onboarding, In Progress, Ongoing)</li>
+    <li><strong>Work Status</strong>: Internal micro-state (Blocked, Waiting on Client, QA)</li>
+  </ul>
+</div>
+  </div>
+
+{% endblock content %}

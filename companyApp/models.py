@@ -216,11 +216,9 @@ class Company(models.Model):
 
     @property
     def has_client_users(self) -> bool:
-        from userApp.models import User as AppUser
         return self.members.filter(
             is_active=True,
             member_type=CompanyMember.MemberType.CLIENT,
-            user__role=AppUser.Roles.CLIENT,
         ).exists()
 
 

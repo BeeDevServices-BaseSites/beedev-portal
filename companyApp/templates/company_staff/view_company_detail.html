@@ -11,5 +11,351 @@
     <h2><a href="{% url 'userApp:staff_home' %}">Dashboard</a></h2>
     <h2><a href="{% url 'company_staff:company_home' %}">Company Home</a></h2>
 </div>
+<div class="mini_menu">
+  <h2><a href="{% url 'company_staff:company_edit_details' company.pk %}">Update Company Info</a></h2>
+  <h2><a href="{% url 'company_staff:edit_company_status' company.pk %}">Update Status</a></h2>
+  <h2><a href="{% url 'company_staff:progress_update' company.pk %}">Update Project Progress</a></h2>
+</div>
+<div class="info">
+  <h3>Details</h3>
+  <table class="entry">
+    <tr>
+      <th>Name:</th>
+      <td>{{company.name}}</td>
+    </tr>
+    <tr>
+  <th>Primary Contact:</th>
+  <td>{{ company.primary_contact_name|default:"—" }}</td>
+</tr>
+<tr>
+  <th>Contact Email:</th>
+  <td>{{ company.primary_contact_email|default:"—" }}</td>
+</tr>
+<tr>
+  <th>Website:</th>
+  <td>
+    {% if company.website %}
+      <a href="{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
+    {% else %}
+      —
+    {% endif %}
+  </td>
+</tr>
+    <tr>
+      <th>Status:</th>
+      <td>{{ company.get_status_display|default:company.status }}</td>
+    </tr>
+    <tr>
+      <th>Work Status:</th>
+      <td>{{ company.get_work_status_display|default:company.work_status }}</td>
+    </tr>
+    <tr>
+        <th>Project Phase:</th>
+        <td>
+          {{ company.get_project_phase_display|default:company.project_phase }}
+          {% if company.project_phase_updated_at %}
+            <span class="muted">(updated {{ company.project_phase_updated_at|date:"Y-m-d H:i" }})</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <th>Client Portal:</th>
+        <td>
+          {% if company.has_client_users %}
+            Enabled
+          {% else %}
+            Disabled
+          {% endif %}
+        </td>
+      </tr>
+
+      <tr>
+        <th>Created:</th>
+        <td>{{ company.created_at|date:"Y-m-d H:i" }}</td>
+      </tr>
+
+      <tr>
+        <th>Last Updated:</th>
+        <td>{{ company.updated_at|date:"Y-m-d H:i" }}</td>
+      </tr>
+  </table>
+</div>
+<div class="info">
+  <h3>Links</h3>
+  <h4>Client-visible</h4>
+  {% if client_links %}
+      <table class="entry">
+        <tr>
+          <th>Type</th>
+          <th>Title</th>
+          <th>URL</th>
+        </tr>
+        {% for link in client_links %}
+          <tr>
+            <td>{{ link.get_link_type_display|default:link.link_type }}</td>
+            <td>{{ link.title }}</td>
+            <td><a href="{{ link.url }}" target="_blank" rel="noopener">Open</a></td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="muted">— No client-visible links yet.</p>
+    {% endif %}
+    <h4>Internal</h4>
+    {% if internal_links %}
+      <table class="entry">
+        <tr>
+          <th>Type</th>
+          <th>Title</th>
+          <th>URL</th>
+        </tr>
+        {% for link in internal_links %}
+          <tr>
+            <td>{{ link.get_link_type_display|default:link.link_type }}</td>
+            <td>{{ link.title }}</td>
+            <td><a href="{{ link.url }}" target="_blank" rel="noopener">Open</a></td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="muted">— No internal links yet.</p>
+    {% endif %}
+</div>
+<div class="info">
+  <h3>Documents</h3>
+  <h4>Active Proposal</h4>
+  {% if active_proposal %}
+      <table class="entry">
+        <tr><th>Title</th><td>{{ active_proposal.title|default:"Proposal" }}</td></tr>
+        <tr><th>Version</th><td>{{ active_proposal.version }}</td></tr>
+        <tr><th>Client-visible</th><td>{{ active_proposal.visible_to_client|yesno:"Yes,No" }}</td></tr>
+        <tr>
+          <th>File/Link</th>
+          <td>
+            {% if active_proposal.file %}
+              <a href="{{ active_proposal.file.url }}" target="_blank" rel="noopener">Download</a>
+            {% elif active_proposal.external_url %}
+              <a href="{{ active_proposal.external_url }}" target="_blank" rel="noopener">Open</a>
+            {% else %}
+              —
+            {% endif %}
+          </td>
+        </tr>
+        <tr><th>Created</th><td>{{ active_proposal.created_at|date:"Y-m-d H:i" }}</td></tr>
+      </table>
+    {% else %}
+      <p class="muted">— No active proposal.</p>
+    {% endif %}
+    {% if proposal_history %}
+      <h4>Proposal History</h4>
+      <table class="entry">
+        <tr>
+          <th>Version</th>
+          <th>Title</th>
+          <th>Client-visible</th>
+          <th>File/Link</th>
+          <th>Created</th>
+        </tr>
+        {% for p in proposal_history %}
+          <tr>
+            <td>v{{ p.version }}</td>
+            <td>{{ p.title|default:"Proposal" }}</td>
+            <td>{{ p.visible_to_client|yesno:"Yes,No" }}</td>
+            <td>
+              {% if p.file %}
+                <a href="{{ p.file.url }}" target="_blank" rel="noopener">Download</a>
+              {% elif p.external_url %}
+                <a href="{{ p.external_url }}" target="_blank" rel="noopener">Open</a>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td>{{ p.created_at|date:"Y-m-d H:i" }}</td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% endif %}
+    <h4>Active Roadmap</h4>
+    {% if active_roadmap %}
+      <table class="entry">
+        <tr><th>Title</th><td>{{ active_roadmap.title|default:"Roadmap" }}</td></tr>
+        <tr><th>Version</th><td>{{ active_roadmap.version }}</td></tr>
+        <tr><th>Client-visible</th><td>{{ active_roadmap.visible_to_client|yesno:"Yes,No" }}</td></tr>
+        <tr>
+          <th>File/Link</th>
+          <td>
+            {% if active_roadmap.file %}
+              <a href="{{ active_roadmap.file.url }}" target="_blank" rel="noopener">Download</a>
+            {% elif active_roadmap.external_url %}
+              <a href="{{ active_roadmap.external_url }}" target="_blank" rel="noopener">Open</a>
+            {% else %}
+              —
+            {% endif %}
+          </td>
+        </tr>
+        <tr><th>Created</th><td>{{ active_roadmap.created_at|date:"Y-m-d H:i" }}</td></tr>
+      </table>
+    {% else %}
+      <p class="muted">— No active roadmap.</p>
+    {% endif %}
+    {% if roadmap_history %}
+      <h4>Roadmap History</h4>
+      <table class="entry">
+        <tr>
+          <th>Version</th>
+          <th>Title</th>
+          <th>Client-visible</th>
+          <th>File/Link</th>
+          <th>Created</th>
+        </tr>
+        {% for r in roadmap_history %}
+          <tr>
+            <td>v{{ r.version }}</td>
+            <td>{{ r.title|default:"Roadmap" }}</td>
+            <td>{{ r.visible_to_client|yesno:"Yes,No" }}</td>
+            <td>
+              {% if r.file %}
+                <a href="{{ r.file.url }}" target="_blank" rel="noopener">Download</a>
+              {% elif r.external_url %}
+                <a href="{{ r.external_url }}" target="_blank" rel="noopener">Open</a>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td>{{ r.created_at|date:"Y-m-d H:i" }}</td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% endif %}
+</div>
+<div class="info">
+  <h3>Agreements</h3>
+  {% if agreements %}
+      <table class="entry">
+        <tr>
+          <th>Kind</th>
+          <th>Title</th>
+          <th>Status</th>
+          <th>Version</th>
+          <th>Client-visible</th>
+          <th>Signed</th>
+          <th>Source</th>
+          <th>Uploaded</th>
+        </tr>
+        {% for a in agreements %}
+          <tr>
+            <td>{{ a.get_kind_display|default:a.kind }}</td>
+            <td>{{ a.title|default:"—" }}</td>
+            <td>{{ a.get_status_display|default:a.status }}</td>
+            <td>v{{ a.version }}</td>
+            <td>{{ a.visible_to_client|yesno:"Yes,No" }}</td>
+            <td>
+              {% if a.file_signed %}
+                <a href="{{ a.file_signed.url }}" target="_blank" rel="noopener">Download</a>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td>
+              {% if a.file_source %}
+                <a href="{{ a.file_source.url }}" target="_blank" rel="noopener">Download</a>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td>{{ a.uploaded_at|date:"Y-m-d H:i" }}</td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="muted">— No agreements uploaded.</p>
+    {% endif %}
+</div>
+<div class="info">
+  <h3>Paid Invoices</h3>
+  {% if paid_invoices %}
+      <table class="entry">
+        <tr>
+          <th>Invoice #</th>
+          <th>Title</th>
+          <th>Amount</th>
+          <th>Paid</th>
+          <th>Client-visible</th>
+          <th>File/Link</th>
+        </tr>
+        {% for inv in paid_invoices %}
+          <tr>
+            <td>{{ inv.invoice_number|default:"—" }}</td>
+            <td>{{ inv.title|default:"—" }}</td>
+            <td>
+              {% if inv.amount %}${{ inv.amount }}{% else %}—{% endif %}
+            </td>
+            <td>{{ inv.paid_at|date:"Y-m-d" }}</td>
+            <td>{{ inv.visible_to_client|yesno:"Yes,No" }}</td>
+            <td>
+              {% if inv.file %}
+                <a href="{{ inv.file.url }}" target="_blank" rel="noopener">Download</a>
+              {% elif inv.external_url %}
+                <a href="{{ inv.external_url }}" target="_blank" rel="noopener">Open</a>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="muted">— No paid invoices yet.</p>
+    {% endif %}
+</div>
+<div class="info">
+  <h3>Updates Log</h3>
+  {% if update_log %}
+      {% for u in update_log %}
+        <div class="box {% if u.pinned %}pinned{% endif %}">
+          <h4>
+            {{ u.title }}
+            {% if u.visible_to_client %}
+              <span class="muted">(client-visible)</span>
+            {% else %}
+              <span class="muted">(internal)</span>
+            {% endif %}
+          </h4>
+          <p class="muted">
+            by {{ u.created_by|user_name|default:"—" }}
+            • {{ u.created_at|date:"Y-m-d H:i" }}
+          </p>
+          <p>{{ u.body|linebreaksbr }}</p>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="muted">— No updates yet.</p>
+    {% endif %}
+</div>
+<div class="info">
+  <h3>Onboarding</h3>
+  {% if onboarding_lists %}
+      <table class="entry">
+        <tr>
+          <th>Title</th>
+          <th>Progress</th>
+          <th>Created</th>
+          <th></th>
+        </tr>
+        {% for lst in onboarding_lists %}
+          <tr>
+            <td>{{ lst.title }}</td>
+            <td>{{ lst.completed_items }} / {{ lst.total_items }} ({{ lst.percent_complete }}%)</td>
+            <td>{{ lst.created_at|date:"Y-m-d" }}</td>
+            <td>
+              <a href="{% url 'onboarding:list_detail' lst.pk %}">Open</a>
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="muted">— No onboarding lists for this company.</p>
+    {% endif %}
+</div>
 
 {% endblock content %}

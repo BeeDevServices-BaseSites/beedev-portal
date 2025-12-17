@@ -15,6 +15,9 @@ urlpatterns = [
     # || Staff/Employee Links ||
     path('', views.company_home, name="company_home"),
     path('company/<int:pk>/', views.view_company_detail, name="company_detail"),
+    path('company/<int:pk>/edit_info/', views.company_edit, name="company_edit_details"),
+    path('company/<int:pk>/edit_status/', views.company_status, name="edit_company_status"),
+    path('company/<int:pk>/edit_progress/', views.progress_update, name="progress_update"),
     
 ]
 if settings.DEBUG:

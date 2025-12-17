@@ -17,7 +17,7 @@
         {% if list_obj.kind == "STAFF" %}
       <a href="#">{{ list_obj.staff_user }} Profile</a>
     {% else %}
-      <a href="{% url 'prospects:prospect_detail' list_obj.id %}">{{ list_obj.company }} Details</a>
+      <a href="{% url 'company_staff:company_detail' list_obj.id %}">{{ list_obj.company }} Details</a>
     {% endif %}
     </h2>
   </div>
