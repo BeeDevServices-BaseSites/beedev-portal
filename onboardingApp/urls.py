@@ -16,6 +16,7 @@ urlpatterns = [
     # || Staff/Employee Side ||
     path('', views.onboard_home, name="onboard_home"),
     path('list/<int:pk>/', views.onboarding_list_detail, name="list_detail"),
+    path('list/<int:pk>/portal_invite/', views.send_portal_invite, name="send_portal_invite"),
 
 ]
 if settings.DEBUG:

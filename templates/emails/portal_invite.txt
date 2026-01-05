@@ -1,0 +1,13 @@
+Hello!
+
+You’ve been invited to access your BeeDev client portal for {{ company_name }}.
+
+Use the link below to create your portal login:
+{{ invite_url }}
+
+⏰ This invite expires on {{ expires_at }}.
+
+If the link expires, just reach out and we’ll send a new one.
+
+— BeeDev Services
+{{ support_email }}

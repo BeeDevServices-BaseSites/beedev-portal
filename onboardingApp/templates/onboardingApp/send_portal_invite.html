@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% load page_title user_extras %}
+
+{% block content %}
+  <head>
+    <link rel="stylesheet" href="{% static 'css/onboarding.css'%}?v={% now 'U' %}">
+  </head>
+  <h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
+
+  <div class="mini_menu">
+    <h2><a href="{% url 'userApp:employee_home' %}">Dashboard</a></h2>
+    <h2><a href="{% url 'onboarding:onboard_home' %}">Onboarding Home</a></h2>
+    <h2><a href="{% url 'onboarding:list_detail' onboarding_list.pk %}">Onboarding List</a></h2>
+  </div>
+
+  <div class="box">
+    <h2>Send Portal Invite for {{company.name}}</h2>
+    <form method="post">
+        {% csrf_token %}
+        <label>Email Address:</label>
+        <input type="email" name="email" required>
+        <button type="submit">Send Invite</button>
+    </form>
+  </div>
+
+{% endblock content %}

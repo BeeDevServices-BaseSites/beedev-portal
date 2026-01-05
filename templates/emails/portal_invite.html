@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+  <body style="font-family: Arial, sans-serif; line-height: 1.5;">
+    <p>Hello!</p>
+
+    <p>
+      You’ve been invited to access your <strong>BeeDev client portal</strong> for
+      <strong>{{ company_name }}</strong>.
+    </p>
+
+    <p style="margin: 20px 0;">
+      <a
+        href="{{ invite_url }}"
+        style="
+          background: #f3db18;
+          color: #000;
+          padding: 10px 16px;
+          text-decoration: none;
+          border-radius: 4px;
+          font-weight: bold;
+        "
+      >
+        Create Your Portal Login
+      </a>
+    </p>
+
+    <p style="color: #555;">
+      ⏰ This invite expires on <strong>{{ expires_at }}</strong>.
+    </p>
+
+    <p style="color: #777; font-size: 0.95em;">
+      If the link expires, just reach out and we’ll send a new one.
+    </p>
+
+    <p style="margin-top: 30px;">
+      — BeeDev Services<br>
+      <a href="mailto:{{ support_email }}">{{ support_email }}</a>
+    </p>
+  </body>
+</html>

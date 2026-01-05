@@ -5,10 +5,15 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db import transaction
+from django.urls import reverse
+from django.utils import timezone
+from datetime import timedelta
 
 from core.utils.context import base_ctx
+from core.emails.portal_invites import send_portal_invite_email
 from userApp.models import User
 from ..models import OnboardingList, OnboardingListItem
+from companyApp.models import PortalInvite
 
 
 # -------------------------------------------------------------------
@@ -198,5 +203,52 @@ def onboarding_list_detail(request, pk: int):
 
 
 @login_required
-def add_onboard_list(request):
-    pass
+def send_portal_invite(request, pk: int):
+    onboarding_list = get_object_or_404(OnboardingList, pk=pk)
+
+    if onboarding_list.kind != "CLIENT" or not onboarding_list.company:
+        raise PermissionDenied("Portal invites are only for client onboarding lists.")
+
+    user = request.user
+    if not user.is_staff:
+        raise PermissionDenied("Not allowed")
+
+    company = onboarding_list.company
+
+    if request.method == "POST":
+        email = request.POST.get("email", "").strip().lower()
+
+        if not email:
+            messages.error(request, "Email address is required.")
+        else:
+            invite = PortalInvite.objects.create(
+                company=company,
+                email=email,
+                created_by=user,
+                expires_at=timezone.now() + timedelta(days=7),
+            )
+
+            invite_url = request.build_absolute_uri(
+                reverse("userApp:accept_invite", kwargs={"token": str(invite.token)})
+            )
+
+            send_portal_invite_email(
+                to_email=invite.email,
+                company_name=company.name,
+                invite_url=invite_url,
+                invited_by_name=(user.get_full_name() or user.username),
+                expires_at=invite.expires_at,
+            )
+
+            messages.success(request, f"Portal invite sent to {email}.")
+            return redirect("onboarding:list_detail", pk=onboarding_list.pk)
+
+    title = f"Send Portal Invite – {company.name}"
+    ctx = {
+        "onboarding_list": onboarding_list,
+        "company": company,
+    }
+    ctx.update(base_ctx(request, title=title))
+    ctx["page_heading"] = title
+    return render(request, "onboardingApp/send_portal_invite.html", ctx)
+

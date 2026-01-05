@@ -22,6 +22,7 @@ urlpatterns = [
     path("staff/profile/", staff_profile, name="staff_profile"),
 
     # || Client Links ||
+    path("invite/<uuid:token>/", accept_invite, name="accept_invite")
 
     
 ]

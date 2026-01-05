@@ -15,19 +15,26 @@
   <div class="mini_menu">
     <h2>
         {% if list_obj.kind == "STAFF" %}
-      <a href="#">{{ list_obj.staff_user }} Profile</a>
-    {% else %}
-      <a href="{% url 'company_staff:company_detail' list_obj.id %}">{{ list_obj.company }} Details</a>
-    {% endif %}
+          <a href="#">{{ list_obj.staff_user }} Profile</a>
+        {% else %}
+          <a href="{% url 'company_staff:company_detail' list_obj.id %}">{{ list_obj.company }} Details</a>
+        {% endif %}
     </h2>
+    {% if list_obj.kind == "CLIENT" and list_obj.company %}
+      <h2>
+        {% if list_obj.company.has_client_users %}
+          Portal access active
+        {% else %}
+          {% if can_edit %}
+            <a href="{% url 'onboarding:send_portal_invite' list_obj.id%}">Create Portal Invite</a>
+          {% else %}
+            No portal Access
+          {% endif %}
+        {% endif %}
+      </h2>
+    {% endif %}
   </div>
   <div class="box">
-    <h2>{{ list_obj.title }}</h2>
-    {% if list_obj.kind == "STAFF" %}
-      <p><strong>Staff:</strong> {{ list_obj.staff_user }}</p>
-    {% else %}
-      <p><strong>Company:</strong> {{ list_obj.company }}</p>
-    {% endif %}
     {% if list_obj.notes %}
       <p>{{ list_obj.notes|linebreaksbr }}</p>
     {% endif %}
