@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% load page_title user_extras %}
+
+{% block content %}
+<head>
+    <link rel="stylesheet" href="{% static 'css/company.css'%}?v={% now 'U' %}">
+</head>
+<h1 class="title">{{ heading|default:page_heading|default:title_short|default:"Untitled Page"|stylize_title:"altTitle" }}</h1>
+
+<div class="mini_menu">
+    <h2><a href="{% url 'userApp:staff_home' %}">Dashboard</a></h2>
+    <h2><a href="{% url 'company_staff:company_home' %}">Company Home</a></h2>
+    <h2><a href="{% url 'company_staff:company_detail' company.pk %}">Back to Company Detail</a></h2>
+</div>
+<div class="info">
+  <h3>Update Company Resources</h3>
+
+  <details open>
+    <summary><strong>Links</strong></summary>
+    <h4>Add Link</h4>
+    <form method="post" action="{% url 'company_staff:company_link_add' company.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{% url 'company_staff:company_resources' company.pk %}">
+        {{ link_form.as_p }}
+        <button type="submit">Add Link</button>
+    </form>
+    <table class="entry">
+        <tr>
+            <th>Type</th>
+            <th>Title</th>
+            <th>Visibility</th>
+            <th>URL</th>
+            <th></th>
+        </tr>
+        {% for link in all_links %}
+      <tr>
+        <td>{{ link.link_type }}</td>
+        <td>{{ link.title }}</td>
+        <td>
+          {% if link.visible_to_client %}
+            Client
+          {% else %}
+            Internal
+          {% endif %}
+        </td>
+        <td>
+          <a href="{{ link.url }}" target="_blank" rel="noopener">Open</a>
+        </td>
+        <td>
+          <form method="post"
+                action="{% url 'company_staff:company_link_delete' company.pk link.pk %}"
+                onsubmit="return confirm('Delete this link?');">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{% url 'company_staff:company_resources' company.pk %}">
+            <button type="submit">Delete</button>
+          </form>
+        </td>
+      </tr>
+    {% empty %}
+      <tr>
+        <td colspan="5" class="muted">— No links added yet.</td>
+      </tr>
+    {% endfor %}
+    </table>
+  </details>
+
+  <details>
+    <summary><strong>Documents</strong></summary>
+    <p class="muted">Upload forms go here (Proposal + Roadmap). Current items are shown below for reference.</p>
+
+    <h4>Active Proposal</h4>
+    {% if active_proposal %}
+      <p>{{ active_proposal.title|default:"Proposal" }} (v{{ active_proposal.version }})</p>
+    {% else %}
+      <p class="muted">— No active proposal.</p>
+    {% endif %}
+
+    <h4>Active Roadmap</h4>
+    {% if active_roadmap %}
+      <p>{{ active_roadmap.title|default:"Roadmap" }} (v{{ active_roadmap.version }})</p>
+    {% else %}
+      <p class="muted">— No active roadmap.</p>
+    {% endif %}
+  </details>
+
+  <details>
+    <summary><strong>Agreements</strong></summary>
+    <p class="muted">Upload form goes here. Current agreements shown below for reference.</p>
+
+    {% if agreements %}
+      <table class="entry">
+        <tr><th>Kind</th><th>Title</th><th>Status</th><th>Uploaded</th></tr>
+        {% for a in agreements %}
+          <tr>
+            <td>{{ a.get_kind_display|default:a.kind }}</td>
+            <td>{{ a.title|default:"—" }}</td>
+            <td>{{ a.get_status_display|default:a.status }}</td>
+            <td>{{ a.uploaded_at|date:"Y-m-d" }}</td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="muted">— No agreements uploaded.</p>
+    {% endif %}
+  </details>
+
+  <details>
+    <summary><strong>Invoices</strong></summary>
+    <p class="muted">Upload form goes here. Current invoices shown below for reference.</p>
+
+    {% if invoices %}
+      <table class="entry">
+        <tr><th>#</th><th>Title</th><th>Amount</th><th>Paid</th></tr>
+        {% for inv in invoices %}
+          <tr>
+            <td>{{ inv.invoice_number|default:"—" }}</td>
+            <td>{{ inv.title|default:"—" }}</td>
+            <td>{% if inv.amount %}${{ inv.amount }}{% else %}—{% endif %}</td>
+            <td>{% if inv.paid_at %}{{ inv.paid_at|date:"Y-m-d" }}{% else %}—{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="muted">— No invoices yet.</p>
+    {% endif %}
+  </details>
+</div>
+
+{% endblock content %}

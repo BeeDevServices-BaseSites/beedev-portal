@@ -17,9 +17,13 @@ from .models import (
     Agreement,
     CompanyUpdateLog,
     PortalInvite,
+    CompanyLink,
+    CompanyLinkType
 )
 
 from userApp.models import User
+
+admin.site.register(CompanyLinkType)
 
 
 # -------- permission helpers (Portal Lite) --------

@@ -13,6 +13,7 @@ class ProspectForm(ModelForm):
             "email",
             "phone",
             "website_url",
+            "sheet_url",
             "notes",
         ]
         widgets = {
@@ -47,6 +48,7 @@ class ProspectEditForm(ModelForm):
             "state",
             "postal_code",
             "country",
+            "sheet_url",
             "notes",
         ]
         widgets = {

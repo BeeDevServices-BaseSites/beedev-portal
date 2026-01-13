@@ -52,9 +52,17 @@
             <tr>
                 <th>Website:</th>
                 {% if prospect.website_url %}
-                    <td>{{prospect.website_url}}</td>
+                    <td><a href="{{prospect.website_url}}" target="_blank">{{prospect.website_url}}</a></td>
                 {% else%}
                     <td>TBD</td>
+                {% endif %}
+            </tr>
+            <tr>
+                <th>Consultation Form</th>
+                {% if prospect.sheet_url %}
+                    <td><a href="{{prospect.sheet_url}}" target="_blank">Google Sheet</a></td>
+                {% else %}
+                    <td>Not Created Yet</td>
                 {% endif %}
             </tr>
         </table>

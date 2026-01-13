@@ -4,13 +4,14 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db.models import Prefetch
 from django.shortcuts import render, get_object_or_404, redirect
+from django.views.decorators.http import require_POST
 from core.utils.context import base_ctx
 
 from userApp.models import User
-from ..models import Company, ProposalDocument, RoadMap, Agreement, Invoice, CompanyUpdateLog, CompanyMember
+from ..models import Company, ProposalDocument, RoadMap, Agreement, Invoice, CompanyUpdateLog, CompanyMember, CompanyLink, CompanyLinkType
 from prospectApp.models import Prospect
 from onboardingApp.models import OnboardingList
-from ..forms import UpdateCompanyInfoForm, UpdateCompanyStatusForm, UpdateCompanyProjectPhaseForm, CompanyUpdateLogForm
+from ..forms import UpdateCompanyInfoForm, UpdateCompanyStatusForm, UpdateCompanyProjectPhaseForm, CompanyUpdateLogForm, CompanyLinkForm
 
 # -------------------------------------------------------------------
 # Permission Helpers
@@ -58,8 +59,8 @@ def view_company_detail(request, pk: int):
 
     paid_invoices = company.invoices.filter(paid_at__isnull=False).order_by("-paid_at", "-created_at")
 
-    client_links = company.links.filter(visible_to_client=True).order_by("link_type", "title")
-    internal_links = company.links.filter(visible_to_client=False).order_by("link_type", "title")
+    client_links = company.links.filter(visible_to_client=True, is_active=True).select_related("link_type").order_by("link_type__sort_order", "title")
+    internal_links = company.links.filter(visible_to_client=False, is_active=True).select_related("link_type").order_by("link_type__sort_order", "title")
 
     client_members = (
         company.members
@@ -73,8 +74,10 @@ def view_company_detail(request, pk: int):
 
     onboarding_lists = OnboardingList.objects.filter(company=company, is_archived=False,).order_by("-created_at")
 
+    link_form = CompanyLinkForm()
+
     title = f"{company.name} - Details"
-    ctx = {"user_obj": user, "read_only": True, "company": company, "active_proposal": active_proposal, "proposal_history": proposal_history, "active_roadmap": active_roadmap, "roadmap_history": roadmap_history, "agreements": agreements, "paid_invoices": paid_invoices, "client_links": client_links, "internal_links": internal_links, "update_log": update_log, "onboarding_lists": onboarding_lists, "client_members": client_members, "has_client_portal_users": has_client_portal_users}
+    ctx = {"user_obj": user, "read_only": True, "company": company, "active_proposal": active_proposal, "proposal_history": proposal_history, "active_roadmap": active_roadmap, "roadmap_history": roadmap_history, "agreements": agreements, "paid_invoices": paid_invoices, "client_links": client_links, "internal_links": internal_links, "update_log": update_log, "onboarding_lists": onboarding_lists, "client_members": client_members, "has_client_portal_users": has_client_portal_users, "link_form": link_form}
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title
     return render(request, "company_staff/view_company_detail.html", ctx)
@@ -173,3 +176,104 @@ def progress_update(request, pk: int):
     ctx.update(base_ctx(request, title=title))
     ctx["page_heading"] = title
     return render(request, "company_staff/progress_update.html", ctx)
+
+@login_required
+def add_company_link(request, pk: int):
+    user = request.user
+    if not _allowed_staff(user):
+        raise PermissionDenied("Not allowed")
+
+    company = get_object_or_404(Company, pk=pk)
+
+    if request.method != "POST":
+        return redirect("company_staff:company_detail", pk=company.pk)
+
+    form = CompanyLinkForm(request.POST)
+    if form.is_valid():
+        link = form.save(commit=False)
+        link.company = company
+        link.created_by = user
+        link.save()
+        messages.success(request, "Link added.")
+    else:
+        messages.error(request, "Could not add link. Please check the form fields.")
+
+    next_url = request.POST.get("next") or request.GET.get("next")
+    if next_url:
+        return redirect(next_url)
+    return redirect("company_staff:company_detail", pk=company.pk)
+
+@login_required
+@require_POST
+def delete_company_link(request, pk: int, link_id: int):
+    user = request.user
+    if not _allowed_staff(user):
+        raise PermissionDenied("Not allowed")
+
+    company = get_object_or_404(Company, pk=pk)
+    link = get_object_or_404(CompanyLink, pk=link_id, company=company)
+
+    link.delete()
+    messages.success(request, "Link deleted.")
+    next_url = request.POST.get("next") or request.GET.get("next")
+    if next_url:
+        return redirect(next_url)
+    return redirect("company_staff:company_detail", pk=company.pk)
+
+@login_required
+def company_resources(request, pk: int):
+    user = request.user
+    if not _allowed_staff(user):
+        raise PermissionDenied("Not Allowed")
+
+    company = get_object_or_404(
+        Company.objects.prefetch_related(
+            "links__link_type",
+            "agreements",
+            "proposals",
+            "roadmaps",
+            "invoices",
+        ),
+        pk=pk,
+    )
+
+    all_links = (
+        company.links
+        .filter(is_active=True)
+        .select_related("link_type")
+        .order_by("visible_to_client", "link_type__sort_order", "title")
+    )
+
+    proposals_qs = company.proposals.all().order_by("-is_active", "-version", "-created_at")
+    active_proposal = proposals_qs.filter(is_active=True).first()
+    proposal_history = proposals_qs.filter(is_active=False)
+
+    roadmaps_qs = company.roadmaps.all().order_by("-is_active", "-version", "-created_at")
+    active_roadmap = roadmaps_qs.filter(is_active=True).first()
+    roadmap_history = roadmaps_qs.filter(is_active=False)
+
+    agreements = company.agreements.all().order_by("-uploaded_at")
+    invoices = company.invoices.all().order_by("-paid_at", "-created_at")
+
+    link_form = CompanyLinkForm()
+
+    title = f"{company.name} - Update Resources"
+    ctx = {
+        "user_obj": user,
+        "read_only": True,
+        "company": company,
+
+        "link_form": link_form,
+        "all_links": all_links,
+
+        "active_proposal": active_proposal,
+        "proposal_history": proposal_history,
+        "active_roadmap": active_roadmap,
+        "roadmap_history": roadmap_history,
+
+        "agreements": agreements,
+        "invoices": invoices,
+    }
+    ctx.update(base_ctx(request, title=title))
+    ctx["page_heading"] = title
+    return render(request, "company_staff/company_resources.html", ctx)

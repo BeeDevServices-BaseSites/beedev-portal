@@ -1,7 +1,7 @@
 # companyApp/forms.py
 
 from django import forms
-from .models import Company, CompanyUpdateLog
+from .models import Company, CompanyUpdateLog, CompanyLink
 
 
 class UpdateCompanyInfoForm(forms.ModelForm):
@@ -49,3 +49,11 @@ class CompanyUpdateLogForm(forms.ModelForm):
 
         self.fields["title"].required = False
         self.fields["body"].required = False
+
+class CompanyLinkForm(forms.ModelForm):
+    class Meta:
+        model = CompanyLink
+        fields = ["link_type", "title", "url", "notes", "visible_to_client", "is_active"]
+        widgets = {
+            "notes": forms.Textarea(attrs={"rows": 2}),
+        }

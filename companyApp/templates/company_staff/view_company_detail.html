@@ -13,6 +13,7 @@
 </div>
 <div class="mini_menu">
   <h2><a href="{% url 'company_staff:company_edit_details' company.pk %}">Update Company Info</a></h2>
+  <h2><a href="{% url 'company_staff:company_resources' company.pk %}">Update Company Resources</a></h2>
   <h2><a href="{% url 'company_staff:edit_company_status' company.pk %}">Update Status</a></h2>
   <h2><a href="{% url 'company_staff:progress_update' company.pk %}">Update Project Progress</a></h2>
 </div>
@@ -30,16 +31,6 @@
 <tr>
   <th>Contact Email:</th>
   <td>{{ company.primary_contact_email|default:"—" }}</td>
-</tr>
-<tr>
-  <th>Website:</th>
-  <td>
-    {% if company.website %}
-      <a href="{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
-    {% else %}
-      —
-    {% endif %}
-  </td>
 </tr>
     <tr>
       <th>Status:</th>
@@ -82,19 +73,37 @@
 </div>
 <div class="info">
   <h3>Links</h3>
+  <h4>Add Links</h4>
+  <form method="post" action="{% url 'company_staff:company_link_add' company.pk %}">
+    {% csrf_token %}
+    {{ link_form.as_p }}
+    <button type="submit">Add Link</button>
+  </form>
   <h4>Client-visible</h4>
+  {% if company.website %}
+    <a href="{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
+  {% else %}
+    - No live website
+  {% endif %}
   {% if client_links %}
       <table class="entry">
         <tr>
           <th>Type</th>
           <th>Title</th>
           <th>URL</th>
+          <th>Delete</th>
         </tr>
         {% for link in client_links %}
           <tr>
-            <td>{{ link.get_link_type_display|default:link.link_type }}</td>
+            <td>{{ link.link_type.label|default:link.link_type }}</td>
             <td>{{ link.title }}</td>
             <td><a href="{{ link.url }}" target="_blank" rel="noopener">Open</a></td>
+            <td>
+              <form method="post" action="{% url 'company_staff:company_link_delete' company.pk link.pk %}" onsubmit="return confirm('Delete this link?');">
+                {% csrf_token %}
+                <button type="submit">Delete</button>
+              </form>
+            </td>
           </tr>
         {% endfor %}
       </table>
@@ -102,18 +111,30 @@
       <p class="muted">— No client-visible links yet.</p>
     {% endif %}
     <h4>Internal</h4>
+    {% if company.consultation_sheet_url %}
+      <a href="{{company.consultation_sheet_url}}" target="_blank" rel="noopener">Consultation Sheet</a>
+    {% else %}
+      - No Consultation Sheet
+    {% endif %}
     {% if internal_links %}
       <table class="entry">
         <tr>
           <th>Type</th>
           <th>Title</th>
           <th>URL</th>
+          <th>Delete</th>
         </tr>
         {% for link in internal_links %}
           <tr>
-            <td>{{ link.get_link_type_display|default:link.link_type }}</td>
+            <td>{{ link.link_type.label|default:link.link_type }}</td>
             <td>{{ link.title }}</td>
             <td><a href="{{ link.url }}" target="_blank" rel="noopener">Open</a></td>
+            <td>
+              <form method="post" action="{% url 'company_staff:company_link_delete' company.pk link.pk %}" onsubmit="return confirm('Delete this link?');">
+                {% csrf_token %}
+                <button type="submit">Delete</button>
+              </form>
+            </td>
           </tr>
         {% endfor %}
       </table>

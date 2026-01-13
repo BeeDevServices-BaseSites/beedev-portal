@@ -18,6 +18,9 @@ urlpatterns = [
     path('company/<int:pk>/edit_info/', views.company_edit, name="company_edit_details"),
     path('company/<int:pk>/edit_status/', views.company_status, name="edit_company_status"),
     path('company/<int:pk>/edit_progress/', views.progress_update, name="progress_update"),
+    path('company/<int:pk>/links/add', views.add_company_link, name="company_link_add"),
+    path('company/<int:pk>/links/<int:link_id>/delete/', views.delete_company_link, name="company_link_delete"),
+    path('company/<int:pk>/resources/', views.company_resources, name="company_resources"),
     
 ]
 if settings.DEBUG:
