@@ -38,15 +38,29 @@
             <tr>
                 <th>Name</th>
                 <th>Company Name</th>
-                <th>Prospect Status</th>
+                <th>Company Status</th>
                 <th>Onboarding List</th>
             </tr>
             {% for w in won %}
                 <tr>
-                    <td><a href="{% url 'company_staff:company_detail' w.pk %}">{{w.full_name}}</a></td>
+                    <td><a href="{% url 'company_staff:company_detail' w.company.pk %}">{{w.full_name}}</a></td>
                     <td>{{w.company_name}}</td>
-                    <td>{{w.status}}</td>
-                    <td></td>
+                    <td>{{w.company.status}}</td>
+                    <td>
+                        {% with ol=onboarding|get_item:w.company.id  %}
+                            {% if ol %}
+                                {% if ol.total_items_count %}
+                                    {{ ol.completed_items_count }}/{{ ol.total_items_count }}
+                                    ({{ ol.percent_complete }}%)
+                                    {% if ol.completed_at %} ✅{% endif %}
+                                {% else %}
+                                    0/0 (0%)
+                                {% endif %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        {% endwith %}
+                    </td>
                 </tr>
             {% empty %}
             <tr>
@@ -56,7 +70,7 @@
         </table>
     </div>
     <div class="detail">
-        <h3>Current Clients</h3>
+        <h3>Clients with Portal Access</h3>
         <table class="entry alt_entry">
             <tr>
                 <th>Username</th>

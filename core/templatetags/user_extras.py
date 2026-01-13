@@ -7,3 +7,9 @@ def user_name(u):
     if not u:
         return ""
     return getattr(u, "display_name", getattr(u, "username", ""))
+
+@register.filter
+def get_item(d, key):
+    if not d:
+        return None
+    return d.get(key)
